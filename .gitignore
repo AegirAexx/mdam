@@ -1,0 +1,62 @@
+# --- uv Specific ---
+# uv creates a .venv directory by default in the project root
+.venv/
+# If you use a custom target directory for uv environments
+uv.lock
+# Note: It is generally recommended to COMMITS uv.lock for projects (apps), 
+# but you might ignore it for libraries. If you want to ignore it, uncomment below:
+# uv.lock
+
+# --- Python General ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Environment & Secrets ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage ---
+.target/
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
