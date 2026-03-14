@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "go test ./...",
+      "go vet ./...",
+      "go build ./...",
+      "go mod tidy"
+    ]
+  }
+}
