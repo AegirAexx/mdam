@@ -47,3 +47,13 @@ type fileCreatedMsg struct {
 	path string
 	err  error
 }
+
+// editorReturnMsg is sent when an external process ($EDITOR or lazygit) exits.
+type editorReturnMsg struct {
+	err error
+}
+
+// scratchReadyMsg is sent when the scratch pad file is confirmed to exist on disk.
+type scratchReadyMsg struct {
+	path string
+}

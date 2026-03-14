@@ -39,6 +39,8 @@ func sendKey(m Model, k string) Model {
 		msg = tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "ctrl+g":
+		msg = tea.KeyMsg{Type: tea.KeyCtrlG}
 	}
 	updated, _ := m.Update(msg)
 	return updated.(Model)
@@ -741,5 +743,122 @@ func TestExportNoDocSelected(t *testing.T) {
 	m = sendKey(m, "e")
 	if !strings.Contains(m.statusMsg, "no document") {
 		t.Errorf("export with no doc: statusMsg = %q, want 'no document'", m.statusMsg)
+	}
+}
+
+// --- Phase 4 tests ---
+
+func TestResolveEditor(t *testing.T) {
+	tests := []struct {
+		cfgEditor string
+		envEditor string
+		want      string
+	}{
+		{"nvim", "vim", "nvim"},   // config takes precedence over $EDITOR
+		{"", "vim", "vim"},        // falls back to $EDITOR
+		{"", "", ""},              // empty when neither is set
+	}
+	for _, tt := range tests {
+		t.Setenv("EDITOR", tt.envEditor)
+		got := resolveEditor(tt.cfgEditor)
+		if got != tt.want {
+			t.Errorf("resolveEditor(%q) with $EDITOR=%q = %q, want %q",
+				tt.cfgEditor, tt.envEditor, got, tt.want)
+		}
+	}
+}
+
+func TestEditorReturnTriggersRescan(t *testing.T) {
+	m := modelWithDocs()
+	m.loading = false
+	m2, cmd := m.Update(editorReturnMsg{})
+	m3 := m2.(Model)
+	if !m3.loading {
+		t.Error("editorReturnMsg should set loading = true")
+	}
+	if cmd == nil {
+		t.Error("editorReturnMsg should return rescan commands")
+	}
+	if m3.statusMsg != "" {
+		t.Errorf("editorReturnMsg success: statusMsg = %q, want empty", m3.statusMsg)
+	}
+}
+
+func TestEditorReturnErrorSetsStatus(t *testing.T) {
+	m := newTestModel()
+	m = sendMsg(m, editorReturnMsg{err: fmt.Errorf("nvim crashed")})
+	if !strings.Contains(m.statusMsg, "editor error") {
+		t.Errorf("editorReturnMsg with err: statusMsg = %q, want 'editor error'", m.statusMsg)
+	}
+}
+
+func TestEnterNoDocSelected(t *testing.T) {
+	m := newTestModel()
+	m = sendMsg(m, docsLoadedMsg{docs: []search.Result{}})
+	m.cfg.Editor = "vi"
+	m = sendKey(m, "enter")
+	if !strings.Contains(m.statusMsg, "no document") {
+		t.Errorf("Enter with no doc: statusMsg = %q, want 'no document'", m.statusMsg)
+	}
+}
+
+func TestEnterNoEditorConfigured(t *testing.T) {
+	m := modelWithDocs()
+	m.cfg.Editor = ""
+	t.Setenv("EDITOR", "")
+	m = sendKey(m, "enter")
+	if !strings.Contains(m.statusMsg, "no editor") {
+		t.Errorf("Enter with no editor: statusMsg = %q, want 'no editor'", m.statusMsg)
+	}
+}
+
+func TestEnterWithDocReturnsCmd(t *testing.T) {
+	m := modelWithDocs()
+	m.cfg.Editor = "vi"
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Error("Enter with doc selected should return a tea.Cmd (editor handoff)")
+	}
+}
+
+func TestScratchReadyMsgOpensEditor(t *testing.T) {
+	m := newTestModel()
+	m.cfg.Editor = "vi"
+	_, cmd := m.Update(scratchReadyMsg{path: "/notes/scratch.md"})
+	if cmd == nil {
+		t.Error("scratchReadyMsg should return cmdOpenEditor")
+	}
+}
+
+func TestScratchReadyMsgNoEditor(t *testing.T) {
+	m := newTestModel()
+	m.cfg.Editor = ""
+	t.Setenv("EDITOR", "")
+	m2, cmd := m.Update(scratchReadyMsg{path: "/notes/scratch.md"})
+	m3 := m2.(Model)
+	if cmd != nil {
+		t.Error("scratchReadyMsg with no editor should return nil cmd")
+	}
+	if !strings.Contains(m3.statusMsg, "no editor") {
+		t.Errorf("scratchReadyMsg no editor: statusMsg = %q, want 'no editor'", m3.statusMsg)
+	}
+}
+
+func TestLazygitDisabled(t *testing.T) {
+	m := newTestModel()
+	m.cfg.Git.Lazygit = false
+	m = sendKey(m, "ctrl+g")
+	if !strings.Contains(m.statusMsg, "disabled") {
+		t.Errorf("ctrl+g lazygit disabled: statusMsg = %q, want 'disabled'", m.statusMsg)
+	}
+}
+
+func TestLazygitEnabledReturnsCmd(t *testing.T) {
+	m := newTestModel()
+	m.cfg.Git.Lazygit = true
+	m.cfg.BaseDir = "/notes"
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	if cmd == nil {
+		t.Error("ctrl+g with lazygit enabled should return a tea.Cmd")
 	}
 }

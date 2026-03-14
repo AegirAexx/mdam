@@ -193,6 +193,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mode = ModeNormal
 		return m, cmdLoadDocs(m.cfg.BaseDir)
 
+	case editorReturnMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("editor error: %v", msg.err)
+		} else {
+			m.statusMsg = ""
+		}
+		m.loading = true
+		return m, tea.Batch(
+			cmdLoadDocs(m.cfg.BaseDir),
+			cmdLoadGitStatus(m.cfg.BaseDir),
+			cmdLoadTodos(m.cfg.TodoPath()),
+		)
+
+	case scratchReadyMsg:
+		editor := resolveEditor(m.cfg.Editor)
+		if editor == "" {
+			m.statusMsg = "no editor configured ($EDITOR not set)"
+			return m, nil
+		}
+		return m, cmdOpenEditor(msg.path, editor)
+
 	// --- Key events ---
 
 	case tea.KeyMsg:
@@ -299,9 +320,17 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.fileCursor = 0
 		m.statusMsg = ""
 
-	// Open — Phase 4
+	// Open in $EDITOR
 	case k == "enter":
-		m.statusMsg = "editor handoff — Phase 4"
+		if selected := m.selectedDoc(); selected != "" {
+			editor := resolveEditor(m.cfg.Editor)
+			if editor == "" {
+				m.statusMsg = "no editor configured ($EDITOR not set)"
+				return m, nil
+			}
+			return m, cmdOpenEditor(selected, editor)
+		}
+		m.statusMsg = "no document selected"
 
 	// Rescan
 	case k == "R":
@@ -322,9 +351,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pickerCursor = 0
 		m.statusMsg = ""
 
-	// Scratch pad — Phase 4
+	// Scratch pad
 	case k == "s":
-		m.statusMsg = "scratch pad — Phase 4"
+		return m, cmdEnsureAndOpenScratch(m.cfg)
 
 	// Export
 	case k == "e":
@@ -332,6 +361,13 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmdExport(selected, m.cfg.ExportDir)
 		}
 		m.statusMsg = "no document selected"
+
+	// Lazygit handoff
+	case k == "ctrl+g":
+		if m.cfg.Git.Lazygit {
+			return m, cmdOpenLazygit(m.cfg.BaseDir)
+		}
+		m.statusMsg = "lazygit disabled (git.lazygit = false)"
 
 	// Delete — Phase 3 stub (destructive; full impl deferred)
 	case k == "d":

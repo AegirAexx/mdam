@@ -6,17 +6,17 @@ MadaM is an administration and routing tool — it organizes, navigates, and aut
 
 ## Status
 
-**Pre-release — Phase 3 of 5 complete**
+**Pre-release — Phase 4 of 5 complete**
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Headless engine (config, scan, parse, TODO, templates, search, export, git, CLI) | Complete |
 | 2 | BubbleTea TUI skeleton (event loop, keybindings, panel layout, dummy data) | Complete |
 | 3 | Integration (real data, git status bar, search, export, template picker wired) | Complete |
-| 4 | Editor handoff (`$EDITOR` + lazygit via `tea.ExecProcess`, suspend/resume) | Pending |
+| 4 | Editor handoff (`$EDITOR` + lazygit via `tea.ExecProcess`, suspend/resume) | Complete |
 | 5 | Polish (lipgloss styling, glamour preview, theming, ambient findability views) | Pending |
 
-The TUI is functional but unstyled. All core engine operations work headlessly via CLI subcommands today.
+The TUI is fully functional but unstyled. All core engine operations work headlessly via CLI subcommands. Press `Enter` on any document to open it in your editor.
 
 ## Features
 
@@ -28,7 +28,7 @@ The TUI is functional but unstyled. All core engine operations work headlessly v
 - **Templates** — User-extensible document scaffolding with variable interpolation
 - **Search** — Fuzzy finding across frontmatter, filenames, and document content
 - **Export** — Strip frontmatter and share clean markdown
-- **Git integration** — Status awareness in the TUI, lazygit handoff for actions (Phase 4)
+- **Git integration** — Status awareness in the TUI, lazygit handoff via `ctrl+g`
 - **Dual interface** — Full TUI and headless CLI with UNIX-style flags and subcommands
 
 ## Requirements
@@ -36,7 +36,7 @@ The TUI is functional but unstyled. All core engine operations work headlessly v
 - Go 1.21+
 - `$EDITOR` set (e.g., `nvim`, `vim`, `nano`)
 - Git (for version control and sync features)
-- [lazygit](https://github.com/jesseduffield/lazygit) (optional, for git handoff — Phase 4)
+- [lazygit](https://github.com/jesseduffield/lazygit) (optional, for git handoff via `ctrl+g`)
 
 ## Installation
 
@@ -106,9 +106,9 @@ Run `mdam` with no subcommand to launch the interactive TUI.
 | `n` | New document (template picker) |
 | `e` | Export selected document |
 | `R` | Re-scan filesystem |
-| `Enter` | Open in `$EDITOR` (Phase 4) |
-| `g` | Open lazygit (Phase 4) |
-| `s` | Scratch pad (Phase 4) |
+| `Enter` | Open selected document in `$EDITOR` |
+| `ctrl+g` | Open lazygit |
+| `s` | Open scratch pad in `$EDITOR` |
 | `q` | Quit |
 
 ### Command Mode (`:`)
@@ -240,7 +240,8 @@ mdam/
 │   ├── KEYBINDINGS.md      # TUI keybinding reference
 │   ├── phase-1-report.md   # Phase 1 implementation report
 │   ├── phase-2-report.md   # Phase 2 implementation report
-│   └── phase-3-report.md   # Phase 3 implementation report
+│   ├── phase-3-report.md   # Phase 3 implementation report
+│   └── phase-4-report.md   # Phase 4 implementation report
 ├── CLAUDE.md          # Agent context and project rules
 └── go.mod
 ```
@@ -262,6 +263,7 @@ go test -v ./internal/todo/...       # Package-specific tests
 - [Phase 1 Report](docs/phase-1-report.md) — Headless engine implementation
 - [Phase 2 Report](docs/phase-2-report.md) — TUI skeleton implementation
 - [Phase 3 Report](docs/phase-3-report.md) — Integration implementation
+- [Phase 4 Report](docs/phase-4-report.md) — Editor handoff implementation
 
 ## License
 

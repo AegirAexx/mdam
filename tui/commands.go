@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -111,6 +112,52 @@ func cmdCreateDoc(t tmpl.Template, vars map[string]string, cfg config.Config) te
 			return fileCreatedMsg{err: fmt.Errorf("writing file: %w", err)}
 		}
 		return fileCreatedMsg{path: path}
+	}
+}
+
+// resolveEditor returns the editor binary to use, preferring cfgEditor then $EDITOR.
+// Returns an empty string if neither is configured.
+func resolveEditor(cfgEditor string) string {
+	if cfgEditor != "" {
+		return cfgEditor
+	}
+	return os.Getenv("EDITOR")
+}
+
+// cmdOpenEditor suspends the TUI and opens path in the given editor.
+// Sends editorReturnMsg when the editor exits.
+func cmdOpenEditor(path, editor string) tea.Cmd {
+	c := exec.Command(editor, path)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorReturnMsg{err: err}
+	})
+}
+
+// cmdOpenLazygit suspends the TUI and opens lazygit rooted at dir.
+// Sends editorReturnMsg when lazygit exits.
+func cmdOpenLazygit(dir string) tea.Cmd {
+	c := exec.Command("lazygit", "-p", dir)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorReturnMsg{err: err}
+	})
+}
+
+// cmdEnsureAndOpenScratch creates the scratch pad document if it does not exist,
+// then sends scratchReadyMsg with the path so the caller can open it in the editor.
+func cmdEnsureAndOpenScratch(cfg config.Config) tea.Cmd {
+	return func() tea.Msg {
+		path := cfg.ScratchPath()
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			now := time.Now().UTC().Format(time.RFC3339)
+			content := fmt.Sprintf(
+				"---\ntitle: Scratch Pad\ntags: []\ncreated: %s\nmodified: %s\ntype: scratch\n---\n",
+				now, now,
+			)
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				return editorReturnMsg{err: fmt.Errorf("creating scratch: %w", err)}
+			}
+		}
+		return scratchReadyMsg{path: path}
 	}
 }
 
