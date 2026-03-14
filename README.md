@@ -6,7 +6,17 @@ MadaM is an administration and routing tool — it organizes, navigates, and aut
 
 ## Status
 
-**Pre-release — Phase 1 (Headless Engine)**
+**Pre-release — Phase 3 of 5 complete**
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Headless engine (config, scan, parse, TODO, templates, search, export, git, CLI) | Complete |
+| 2 | BubbleTea TUI skeleton (event loop, keybindings, panel layout, dummy data) | Complete |
+| 3 | Integration (real data, git status bar, search, export, template picker wired) | Complete |
+| 4 | Editor handoff (`$EDITOR` + lazygit via `tea.ExecProcess`, suspend/resume) | Pending |
+| 5 | Polish (lipgloss styling, glamour preview, theming, ambient findability views) | Pending |
+
+The TUI is functional but unstyled. All core engine operations work headlessly via CLI subcommands today.
 
 ## Features
 
@@ -18,23 +28,19 @@ MadaM is an administration and routing tool — it organizes, navigates, and aut
 - **Templates** — User-extensible document scaffolding with variable interpolation
 - **Search** — Fuzzy finding across frontmatter, filenames, and document content
 - **Export** — Strip frontmatter and share clean markdown
-- **Git integration** — Status awareness in the TUI, lazygit handoff for actions
+- **Git integration** — Status awareness in the TUI, lazygit handoff for actions (Phase 4)
 - **Dual interface** — Full TUI and headless CLI with UNIX-style flags and subcommands
 
 ## Requirements
 
-- Go 1.26+
+- Go 1.21+
 - `$EDITOR` set (e.g., `nvim`, `vim`, `nano`)
 - Git (for version control and sync features)
-- [lazygit](https://github.com/jesseduffield/lazygit) (optional, for git handoff)
+- [lazygit](https://github.com/jesseduffield/lazygit) (optional, for git handoff — Phase 4)
 
 ## Installation
 
-```bash
-go install github.com/AegirAexx/mdam@latest
-```
-
-Or build from source:
+Build from source:
 
 ```bash
 git clone https://github.com/AegirAexx/mdam.git
@@ -45,14 +51,8 @@ go build -o mdam ./cmd/mdam
 ## Quick Start
 
 ```bash
-# Initialize configuration
-mdam config --init
-
 # Create today's journal entry
 mdam journal create
-
-# Open the scratch pad
-mdam scratch
 
 # List open TODOs
 mdam todo list
@@ -60,54 +60,157 @@ mdam todo list
 # Search for a document
 mdam search "nginx setup"
 
+# Import a markdown file
+mdam import ~/Downloads/notes.md
+
 # Launch the TUI
 mdam
 ```
 
+## TUI
+
+Run `mdam` with no subcommand to launch the interactive TUI.
+
+```
+▶ Files ──────────────────────│─ Preview ──────────────────────────
+> 2026-03-14.md          [M]  │  Journal 2026-03-14
+  2026-03-13.md               │
+  setup-nginx.md         [?]  │  type: journal
+  deploy-runbook.md           │  tags: daily
+  meeting-notes-…             │  modified: 2026-03-14
+                              │
+                              │  2026-03-14.md
+                              │─ TODOs ─────────────────────────────
+                              │> - [ ] Review PR #42 @work
+                              │  - [ ] Buy groceries @personal
+──────────────────────────────────────────────────────────────────
+ NORMAL │ main ↑2 │ 5 docs              /search  :cmd  ?help  q:quit
+```
+
+### Keybindings
+
+| Key | Action |
+|---|---|
+| `j` / `k` | Move down / up |
+| `h` / `l` | Previous / next panel |
+| `Tab` / `Shift+Tab` | Cycle panel focus |
+| `gg` / `G` | Jump to top / bottom |
+| `1` | All documents |
+| `2` | Journal entries |
+| `3` | Knowledge base |
+| `4` | TODO panel |
+| `5` | Recently modified |
+| `/` | Fuzzy search |
+| `:` | Command mode |
+| `?` | Help overlay |
+| `n` | New document (template picker) |
+| `e` | Export selected document |
+| `R` | Re-scan filesystem |
+| `Enter` | Open in `$EDITOR` (Phase 4) |
+| `g` | Open lazygit (Phase 4) |
+| `s` | Scratch pad (Phase 4) |
+| `q` | Quit |
+
+### Command Mode (`:`)
+
+| Command | Action |
+|---|---|
+| `:q` / `:quit` | Quit |
+| `:todo sweep` | Run TODO sweep manually |
+| `:todo archive` | Archive old completed tasks |
+
+### Git Status Markers
+
+Files in the managed tree show their git status inline:
+
+| Marker | Meaning |
+|---|---|
+| `[M]` | Modified (working tree) |
+| `[A]` | Staged |
+| `[?]` | Untracked |
+
 ## Configuration
 
-MadaM reads its configuration from `~/.config/mdam/config.yml`. Run `mdam config --init` to generate a default configuration, or `mdam config --edit` to open it in your editor.
+MadaM reads `~/.config/mdam/config.yml`. If the file does not exist, sensible defaults are used.
 
-See [docs/mdam-spec-v1.md](docs/mdam-spec-v1.md) for the full configuration reference.
+```yaml
+editor: nvim                          # falls back to $EDITOR env var
+author: "Your Name"
+base_dir: ~/notes                     # root of your managed document tree
+export_dir: ~/Downloads
+
+import:
+  inbox_dir: ~/notes/.inbox
+  auto_fix: false
+
+git:
+  enabled: true
+  auto_commit: false
+  lazygit: true
+
+todo:
+  default_category: personal
+  archive_after_days: 30
+
+journal:
+  auto_create: true
+  sweep_on_create: true
+```
+
+Open the config in your editor:
+
+```bash
+mdam config --edit
+```
+
+## Frontmatter Contract
+
+Every managed document requires these YAML frontmatter fields:
+
+```yaml
+---
+title: "My Document"
+tags: [devops, nginx]
+created: 2026-03-14T09:00:00Z
+modified: 2026-03-14T09:00:00Z
+type: kb   # journal | kb | todo | scratch | unsorted
+---
+```
+
+## TODO Task Format
+
+```
+- [ ] Review PR #42 @work !high (2026-03-14)
+- [x] Update DNS records @work (2026-03-12) ✓2026-03-13
+```
+
+Fields: `@category`, `!priority`, `(created-date)`, `✓completed-date`.
 
 ## CLI Reference
 
 ```
 mdam                                     Launch TUI (default)
-mdam ui                                  Launch TUI (explicit)
 
-mdam journal create [date]               Create journal entry
+mdam journal create [date]               Create journal entry (today if no date)
 mdam journal list [--month YYYY-MM]      List journal entries
 
 mdam todo list [--status S] [--category C] [--all]
-mdam todo sweep                          Run TODO sweep
+mdam todo sweep                          Run TODO sweep manually
 mdam todo archive [--older-than N]       Archive completed tasks
-
-mdam kb list [--type T]                  List KB documents
-mdam kb create --template T --title "T"  Create KB doc
 
 mdam search "query" [--tag T] [--type T] [--modified-after D]
 
-mdam scratch                             Open scratch pad
-mdam new [--template T] [--title "T"]    Create document from template
-
 mdam import <path> [--auto-fix] [--dry-run]
-mdam export <file> [--to DIR] [--clipboard]
+mdam export <file> [--to DIR]
 
-mdam status [--porcelain]                Git status summary
+mdam status [--porcelain]                Git status summary for managed tree
 
-mdam template list                       List templates
-mdam template show <name>                Show template content
+mdam template list                       List available templates
+mdam template show <name>                Display template content
 
-mdam config                              Show configuration
-mdam config --edit                       Open config in $EDITOR
-mdam config --init                       Generate default config
+mdam config                              Show current configuration
+mdam config --edit                       Open config.yml in $EDITOR
 ```
-
-## Documentation
-
-- [Project Specification](docs/mdam-spec-v1.md) — Full feature spec, architecture, and execution plan
-- [Keybindings](docs/KEYBINDINGS.md) — TUI keybinding reference
 
 ## Project Structure
 
@@ -115,40 +218,50 @@ mdam config --init                       Generate default config
 mdam/
 ├── cmd/mdam/          # Application entrypoint
 ├── internal/
-│   ├── config/        # Configuration loading and validation
-│   ├── document/      # Markdown document model and frontmatter parsing
-│   ├── import/        # Import pipeline and validation
-│   ├── journal/       # Journal creation and management
-│   ├── todo/          # TODO parsing, sweep, and archive
-│   ├── template/      # Template discovery and interpolation
-│   ├── search/        # Search and fuzzy matching
-│   ├── export/        # Frontmatter stripping and export
-│   └── git/           # Git status detection
-├── tui/               # BubbleTea TUI (Phase 2+)
-├── docs/              # Project documentation
-├── CLAUDE.md          # Agent context file
-├── README.md
+│   ├── config/        # Configuration loading (Viper, config.yml)
+│   ├── document/      # Markdown document model, frontmatter parsing/validation
+│   ├── importer/      # Import pipeline, filename and frontmatter validation
+│   ├── journal/       # Journal creation, date management
+│   ├── todo/          # TODO parsing, sweep logic, archive
+│   ├── template/      # Template discovery and variable interpolation
+│   ├── search/        # Fuzzy search across frontmatter and filenames
+│   ├── export/        # Frontmatter stripping for sharing
+│   └── git/           # Git status detection (shells out to git)
+├── tui/               # BubbleTea TUI
+│   ├── mode.go        # Mode, PanelID, View types
+│   ├── keys.go        # KeyMap and DefaultKeyMap()
+│   ├── messages.go    # Async message types for engine responses
+│   ├── commands.go    # tea.Cmd factories wrapping engine calls
+│   ├── model.go       # Model struct, Init/Update, all mode handlers
+│   ├── view.go        # View(), panel rendering, status bar
+│   └── tui.go         # Run(cfg) entry point
+├── docs/
+│   ├── mdam-spec-v1.md     # Full project specification
+│   ├── KEYBINDINGS.md      # TUI keybinding reference
+│   ├── phase-1-report.md   # Phase 1 implementation report
+│   ├── phase-2-report.md   # Phase 2 implementation report
+│   └── phase-3-report.md   # Phase 3 implementation report
+├── CLAUDE.md          # Agent context and project rules
 └── go.mod
 ```
 
 ## Development
 
 ```bash
-# Run all tests
-go test ./...
-
-# Run tests with verbose output
-go test -v ./...
-
-# Run tests for a specific package
-go test -v ./internal/todo/...
-
-# Build
-go build -o mdam ./cmd/mdam
-
-# Vet
-go vet ./...
+go test ./...                        # Run all tests
+go vet ./...                         # Static analysis
+go build -o mdam ./cmd/mdam          # Build binary
+go test -v ./tui/...                 # TUI tests with output
+go test -v ./internal/todo/...       # Package-specific tests
 ```
+
+## Documentation
+
+- [Project Specification](docs/mdam-spec-v1.md) — Full feature spec, architecture, and execution plan
+- [Keybindings](docs/KEYBINDINGS.md) — TUI keybinding reference
+- [Phase 1 Report](docs/phase-1-report.md) — Headless engine implementation
+- [Phase 2 Report](docs/phase-2-report.md) — TUI skeleton implementation
+- [Phase 3 Report](docs/phase-3-report.md) — Integration implementation
 
 ## License
 
