@@ -1,62 +1,38 @@
-# --- uv Specific ---
-# uv creates a .venv directory by default in the project root
-.venv/
-# If you use a custom target directory for uv environments
-uv.lock
-# Note: It is generally recommended to COMMITS uv.lock for projects (apps), 
-# but you might ignore it for libraries. If you want to ignore it, uncomment below:
-# uv.lock
-
-# --- Python General ---
-__pycache__/
-*.py[cod]
-*$py.class
+# Binaries
+mdam
+*.exe
+*.exe~
+*.dll
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+*.dylib
 
-# --- Environment & Secrets ---
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Test binary
+*.test
 
-# --- Testing & Coverage ---
-.target/
-.pytest_cache/
-.tox/
-.nox/
-.coverage
-.coverage.*
-htmlcov/
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
+# Output of go coverage
+*.out
+coverage.html
 
-# --- IDEs & Editors ---
-.vscode/
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE and editor files
 .idea/
+.vscode/
 *.swp
 *.swo
+*~
 .DS_Store
+Thumbs.db
+
+# Debug
+debug
+__debug_bin*
+
+# Environment and local config
+.env
+.env.local
