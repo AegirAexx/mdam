@@ -99,12 +99,12 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("editor", os.Getenv("EDITOR"))
 	v.SetDefault("author", "")
-	v.SetDefault("base_dir", filepath.Join(home, "notes"))
+	v.SetDefault("base_dir", "")
 	v.SetDefault("export_dir", filepath.Join(home, "Downloads"))
 	v.SetDefault("theme", "tokyonight")
 	v.SetDefault("nerd_fonts", false)
 
-	v.SetDefault("import.inbox_dir", filepath.Join(home, "notes", ".inbox"))
+	v.SetDefault("import.inbox_dir", "")
 	v.SetDefault("import.auto_fix", false)
 
 	v.SetDefault("git.enabled", true)
@@ -149,22 +149,32 @@ func (c Config) KBDir() string {
 
 // TemplatesDir returns the templates subdirectory within BaseDir.
 func (c Config) TemplatesDir() string {
-	return filepath.Join(c.BaseDir, "templates")
+	return filepath.Join(c.BaseDir, ".templates")
+}
+
+// TodoDir returns the todo subdirectory within BaseDir.
+func (c Config) TodoDir() string {
+	return filepath.Join(c.BaseDir, "todo")
 }
 
 // TodoPath returns the path for the global TODO file.
 func (c Config) TodoPath() string {
-	return filepath.Join(c.BaseDir, "todo.md")
+	return filepath.Join(c.TodoDir(), "todo.md")
+}
+
+// ScratchDir returns the scratch subdirectory within BaseDir.
+func (c Config) ScratchDir() string {
+	return filepath.Join(c.BaseDir, "scratch")
 }
 
 // ScratchPath returns the path for the scratch pad file.
 func (c Config) ScratchPath() string {
-	return filepath.Join(c.BaseDir, "scratch.md")
+	return filepath.Join(c.ScratchDir(), "scratch.md")
 }
 
 // ArchivePath returns the path for the TODO archive file.
 func (c Config) ArchivePath() string {
-	return filepath.Join(c.BaseDir, "archive.md")
+	return filepath.Join(c.TodoDir(), "archive.md")
 }
 
 // PinsPath returns the path for the pinned documents file.

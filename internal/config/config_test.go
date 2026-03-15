@@ -143,16 +143,32 @@ func TestConfigDirs(t *testing.T) {
 	if cfg.KBDir() != "/base/kb" {
 		t.Errorf("KBDir = %q", cfg.KBDir())
 	}
-	if cfg.TemplatesDir() != "/base/templates" {
+	if cfg.TemplatesDir() != "/base/.templates" {
 		t.Errorf("TemplatesDir = %q", cfg.TemplatesDir())
 	}
-	if cfg.TodoPath() != "/base/todo.md" {
+	if cfg.TodoDir() != "/base/todo" {
+		t.Errorf("TodoDir = %q", cfg.TodoDir())
+	}
+	if cfg.TodoPath() != "/base/todo/todo.md" {
 		t.Errorf("TodoPath = %q", cfg.TodoPath())
 	}
-	if cfg.ScratchPath() != "/base/scratch.md" {
+	if cfg.ScratchDir() != "/base/scratch" {
+		t.Errorf("ScratchDir = %q", cfg.ScratchDir())
+	}
+	if cfg.ScratchPath() != "/base/scratch/scratch.md" {
 		t.Errorf("ScratchPath = %q", cfg.ScratchPath())
 	}
-	if cfg.ArchivePath() != "/base/archive.md" {
+	if cfg.ArchivePath() != "/base/todo/archive.md" {
 		t.Errorf("ArchivePath = %q", cfg.ArchivePath())
+	}
+}
+
+func TestLoadDefaultsBaseDir(t *testing.T) {
+	cfg, err := LoadFrom("/does/not/exist/config.yml")
+	if err != nil {
+		t.Fatalf("LoadFrom error = %v", err)
+	}
+	if cfg.BaseDir != "" {
+		t.Errorf("BaseDir default = %q, want empty string", cfg.BaseDir)
 	}
 }
