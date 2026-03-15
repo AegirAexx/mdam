@@ -283,11 +283,11 @@ go test -v ./internal/todo/...       # Package-specific tests
 
 - [Project Specification](docs/mdam-spec-v1.md) — Full feature spec, architecture, and execution plan
 - [Keybindings](docs/KEYBINDINGS.md) — TUI keybinding reference
-- [Phase 1 Report](docs/phase-1-report.md) — Headless engine implementation
-- [Phase 2 Report](docs/phase-2-report.md) — TUI skeleton implementation
-- [Phase 3 Report](docs/phase-3-report.md) — Integration implementation
-- [Phase 4 Report](docs/phase-4-report.md) — Editor handoff implementation
-- [Phase 5 Report](docs/phase-5-report.md) — Polish and visual design implementation
+- [Kick Off | Phase 1 Report](docs/kick-off-reports/phase-1-report.md) — Headless engine implementation
+- [Kick Off | Phase 2 Report](docs/kick-off-reports/phase-2-report.md) — TUI skeleton implementation
+- [Kick Off | Phase 3 Report](docs/kick-off-reports/phase-3-report.md) — Integration implementation
+- [Kick Off | Phase 4 Report](docs/kick-off-reports/phase-4-report.md) — Editor handoff implementation
+- [Kick Off | Phase 5 Report](docs/kick-off-reports/phase-5-report.md) — Polish and visual design implementation
 - [Handoff](docs/HANDOFF.md) — Complete project state for future sessions
 
 ## License
