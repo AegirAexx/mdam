@@ -105,6 +105,18 @@ func Render(t Template, vars map[string]string) (string, error) {
 	return content, nil
 }
 
+// TemplateType extracts the value of the "type:" field from the frontmatter
+// block of a template's content. Returns an empty string if the field is absent.
+func TemplateType(content string) string {
+	for _, line := range strings.SplitN(content, "\n", 30) {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "type:") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "type:"))
+		}
+	}
+	return ""
+}
+
 // UnresolvedVars returns all {{variable}} placeholders remaining in content
 // that have not been substituted.
 func UnresolvedVars(content string) []string {

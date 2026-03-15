@@ -1,6 +1,6 @@
 # MadaM — Project Handoff
 
-> Complete project state as of Phase 5 + Issues #1 and #4 fixed. All five phases are implemented and passing. This document is the single source of truth for any future session or collaborator picking up the project.
+> Complete project state as of Phase 5 + Issues #1, #4, #3, #2, #5 fixed. All five phases are implemented and passing. This document is the single source of truth for any future session or collaborator picking up the project.
 
 ---
 
@@ -102,15 +102,15 @@ These three commands are the mandatory gate after every change. Never commit wit
 | `internal/importer/` | Import pipeline: validate, auto-fix, duplicate detection |
 | `internal/journal/` | Daily journal creation from template, listing, date parsing |
 | `internal/todo/` | Task parsing, sweep logic, archive, status/category filter |
-| `internal/template/` | Template discovery (directory scan), render with variable interpolation |
+| `internal/template/` | Template discovery, render with variable interpolation, `TemplateType()` extracts type field from frontmatter |
 | `internal/search/` | Fuzzy search over frontmatter + optional body content |
 | `internal/export/` | Frontmatter stripping for sharing/clipboard |
 | `internal/git/` | Shells out to `git status --porcelain` and `git rev-list` |
 | `tui/mode.go` | `Mode`, `PanelID`, `View` type definitions |
 | `tui/keys.go` | `KeyMap` and `DefaultKeyMap()` |
 | `tui/messages.go` | All async message types (`docsLoadedMsg`, `previewReadyMsg`, `tickMsg`, etc.) |
-| `tui/commands.go` | `tea.Cmd` factories wrapping engine calls |
-| `tui/model.go` | `Model` struct, `Init`/`Update`, all mode handler functions |
+| `tui/commands.go` | `tea.Cmd` factories wrapping engine calls; `cmdJournalCreate` delegates to `journal.Create` and returns `scratchReadyMsg` |
+| `tui/model.go` | `Model` struct, `Init`/`Update`, all mode handlers; `pickerTemplates` holds filtered (journal+kb) picker subset |
 | `tui/view.go` | `View()`, panel rendering, status bar |
 | `tui/view_dashboard.go` | `renderDashboard()` — dashboard layout |
 | `tui/view_tags.go` | `buildTagIndex()`, `renderTagBrowser()`, `renderTagPanel()` |
@@ -187,7 +187,7 @@ Full reference: `docs/KEYBINDINGS.md`
 | `1`–`6` | Normal | Switch view |
 | `Enter` | Normal | Open in `$EDITOR` |
 | `s` | Normal | Open scratch pad |
-| `n` | Normal | New document |
+| `n` | Normal | New document (journal or KB picker) |
 | `d` | Normal | Delete (enter confirm mode) |
 | `y` / `n` / `Esc` | DeleteConfirm | Confirm / cancel delete |
 | `e` | Normal | Export |
@@ -238,6 +238,8 @@ These items are explicitly out of scope for v1. See spec §9 for full discussion
 | Issue | Report | Summary |
 |---|---|---|
 | #1 | `issue-001-report.md` | First-run initialization, path bug fixes, `internal/setup` package |
+| #4 | `issue-002-report.md` | Frontmatter field order, date-only `!!timestamp` emit, docs reorganization |
+| #3, #2, #5 | `issue-003-report.md` | Template picker filter, journal creation flow fix, README restructure |
 
 ---
 

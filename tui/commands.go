@@ -14,6 +14,7 @@ import (
 	"github.com/AegirAexx/mdam/internal/config"
 	"github.com/AegirAexx/mdam/internal/export"
 	"github.com/AegirAexx/mdam/internal/git"
+	"github.com/AegirAexx/mdam/internal/journal"
 	"github.com/AegirAexx/mdam/internal/search"
 	tmpl "github.com/AegirAexx/mdam/internal/template"
 	"github.com/AegirAexx/mdam/internal/todo"
@@ -113,6 +114,18 @@ func cmdCreateDoc(t tmpl.Template, vars map[string]string, cfg config.Config) te
 			return fileCreatedMsg{err: fmt.Errorf("writing file: %w", err)}
 		}
 		return fileCreatedMsg{path: path}
+	}
+}
+
+// cmdJournalCreate creates today's journal entry and opens it in the editor.
+// If the entry already exists, it is opened without modification.
+func cmdJournalCreate(cfg config.Config) tea.Cmd {
+	return func() tea.Msg {
+		path, err := journal.Create(cfg.JournalDir(), cfg.TemplatesDir(), time.Now())
+		if err != nil {
+			return fileCreatedMsg{err: fmt.Errorf("creating journal: %w", err)}
+		}
+		return scratchReadyMsg{path: path}
 	}
 }
 

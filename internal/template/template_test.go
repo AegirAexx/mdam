@@ -164,6 +164,33 @@ func TestWriteBuiltins(t *testing.T) {
 	}
 }
 
+func TestTemplateType(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"journal", "---\ntype: journal\ntitle: x\n---\n", "journal"},
+		{"kb", "---\ntype: kb\ntitle: x\n---\n", "kb"},
+		{"scratch", "---\ntype: scratch\ntitle: x\n---\n", "scratch"},
+		{"no type", "---\ntitle: x\n---\n", ""},
+		{"empty", "", ""},
+		{"type with spaces", "---\ntype:   kb  \ntitle: x\n---\n", "kb"},
+		{"builtin journal", journalTemplate, "journal"},
+		{"builtin kb", kbTemplate, "kb"},
+		{"builtin howto", howtoTemplate, "kb"},
+		{"builtin scratch", scratchTemplate, "scratch"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TemplateType(tt.content)
+			if got != tt.want {
+				t.Errorf("TemplateType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuiltinTemplatesContent(t *testing.T) {
 	builtins := BuiltinTemplates()
 	for name, content := range builtins {
