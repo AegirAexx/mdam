@@ -1,6 +1,6 @@
 # MadaM — Project Handoff
 
-> Complete project state as of Phase 5. All five phases are implemented and passing. This document is the single source of truth for any future session or collaborator picking up the project.
+> Complete project state as of Phase 5 + Issue #1 fix. All five phases are implemented and passing. Issue #1 (first-run initialization) is merged on branch `fix/issue-01`. This document is the single source of truth for any future session or collaborator picking up the project.
 
 ---
 
@@ -13,10 +13,10 @@ MadaM (Markdown Admin Management) is a keyboard-driven terminal TUI for managing
 ## 2. Build, Test, Run
 
 ```bash
-go test ./...                  # run all tests (all 11 packages must pass)
+go test ./...                  # run all tests (all 12 packages must pass)
 go vet ./...                   # static analysis (must be clean)
 go build -o mdam ./cmd/mdam    # build the binary
-./mdam                         # launch the TUI (requires ~/.config/mdam/config.yml or defaults)
+./mdam                         # launch the TUI — first run prompts for base dir and scaffolds folders
 ```
 
 These three commands are the mandatory gate after every change. Never commit with a failing test or vet warning.
@@ -96,7 +96,8 @@ These three commands are the mandatory gate after every change. Never commit wit
 |---|---|
 | `cmd/mdam/` | Binary entrypoint, delegates to `internal/cli` |
 | `internal/cli/` | Cobra subcommand wiring — no business logic |
-| `internal/config/` | Viper config loading from `~/.config/mdam/config.yml` |
+| `internal/config/` | Viper config loading from `~/.config/mdam/config.yml`; corrected path helpers |
+| `internal/setup/` | First-run detection, config scaffolding, directory creation, template seeding |
 | `internal/document/` | `Document` model, frontmatter parsing/validation, kebab-case check |
 | `internal/importer/` | Import pipeline: validate, auto-fix, duplicate detection |
 | `internal/journal/` | Daily journal creation from template, listing, date parsing |
@@ -164,6 +165,12 @@ journal:
 
 **Computed paths (not in config):**
 - `cfg.PinsPath()` → `~/.config/mdam/pins.json`
+- `cfg.TemplatesDir()` → `{base_dir}/.templates`
+- `cfg.TodoDir()` / `cfg.TodoPath()` → `{base_dir}/todo/todo.md`
+- `cfg.ScratchDir()` / `cfg.ScratchPath()` → `{base_dir}/scratch/scratch.md`
+- `cfg.ArchivePath()` → `{base_dir}/todo/archive.md`
+
+**First-run behavior:** `base_dir` defaults to `""`. On startup, `setup.IsFirstRun` detects a missing config or empty/absent `base_dir` and runs the guided setup flow (prompts for path, scaffolds 6 dirs, seeds templates, creates scratch pad). Fully idempotent.
 
 ---
 
@@ -223,6 +230,12 @@ These items are explicitly out of scope for v1. See spec §9 for full discussion
 | 3 | `docs/phase-3-report.md` | Real data wired, git status bar |
 | 4 | `docs/phase-4-report.md` | `$EDITOR` + lazygit handoff |
 | 5 | `docs/phase-5-report.md` | Theming, glamour preview, ambient findability |
+
+## 9. Issue Fix Index
+
+| Issue | Report | Summary |
+|---|---|---|
+| #1 | `docs/issue-reports/issue-001-report.md` | First-run initialization, path bug fixes, `internal/setup` package |
 
 ---
 
