@@ -61,9 +61,10 @@ type Model struct {
 	searchActive  bool // true = showing search results in file panel
 
 	// --- Template picker state ---
-	templates    []tmpl.Template
-	pickerCursor int
-	pendingTmpl  tmpl.Template
+	templates      []tmpl.Template
+	pickerTemplates []tmpl.Template // filtered subset shown in the picker overlay
+	pickerCursor   int
+	pendingTmpl    tmpl.Template
 	varNames     []string // unresolved {{var}} names from selected template
 	varValues    []string // user-entered values (parallel to varNames)
 	varCursor    int      // index of var currently being filled
@@ -445,6 +446,13 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.templates = append(m.templates, tmpl.Template{Name: name, Content: content})
 			}
 		}
+		// Expose only top-level document types (journal and kb) in the picker.
+		m.pickerTemplates = nil
+		for _, t := range m.templates {
+			if t.Name == "journal" || t.Name == "kb" {
+				m.pickerTemplates = append(m.pickerTemplates, t)
+			}
+		}
 		m.mode = ModeTemplatePicker
 		m.pickerCursor = 0
 		m.statusMsg = ""
@@ -586,7 +594,7 @@ func (m Model) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "j", "down":
-		if m.pickerCursor < len(m.templates)-1 {
+		if m.pickerCursor < len(m.pickerTemplates)-1 {
 			m.pickerCursor++
 		}
 
@@ -596,12 +604,21 @@ func (m Model) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "enter":
-		if len(m.templates) == 0 {
+		if len(m.pickerTemplates) == 0 {
 			m.mode = ModeNormal
 			return m, nil
 		}
-		m.pendingTmpl = m.templates[m.pickerCursor]
-		rawVars := tmpl.UnresolvedVars(m.pendingTmpl.Content)
+		m.pendingTmpl = m.pickerTemplates[m.pickerCursor]
+
+		// Journal entries bypass the variable flow — delegate to journal.Create.
+		if tmpl.TemplateType(m.pendingTmpl.Content) == "journal" {
+			m.mode = ModeNormal
+			return m, cmdJournalCreate(m.cfg)
+		}
+
+		// Render builtins first so only genuinely user-supplied vars remain.
+		rendered, _ := tmpl.Render(m.pendingTmpl, map[string]string{})
+		rawVars := tmpl.UnresolvedVars(rendered)
 		m.varNames = nil
 		seen := map[string]bool{}
 		for _, v := range rawVars {

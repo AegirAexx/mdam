@@ -313,9 +313,9 @@ func (m Model) renderStatusBar() string {
 func (m Model) viewTemplatePicker() string {
 	var b strings.Builder
 	b.WriteString("\n")
-	b.WriteString(m.theme.DashboardHeader.Render("  New Document — Select Template"))
+	b.WriteString(m.theme.DashboardHeader.Render("  New Document — Select Type"))
 	b.WriteString("\n\n")
-	for i, t := range m.templates {
+	for i, t := range m.pickerTemplates {
 		if i == m.pickerCursor {
 			b.WriteString(m.theme.FileCursor.Render(fmt.Sprintf("  %s%-12s", m.icons.CursorSel, t.Name)))
 		} else {
@@ -323,7 +323,7 @@ func (m Model) viewTemplatePicker() string {
 		}
 		b.WriteString("\n")
 	}
-	if len(m.templates) == 0 {
+	if len(m.pickerTemplates) == 0 {
 		b.WriteString(m.theme.PreviewMeta.Render("  (no templates found)"))
 		b.WriteString("\n")
 	}

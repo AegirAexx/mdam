@@ -669,7 +669,7 @@ func TestCommandUnknown(t *testing.T) {
 func TestTemplatePickerNavigation(t *testing.T) {
 	m := newTestModel()
 	m.mode = ModeTemplatePicker
-	m.templates = []tmpl.Template{
+	m.pickerTemplates = []tmpl.Template{
 		{Name: "journal"},
 		{Name: "kb"},
 	}
@@ -1250,6 +1250,125 @@ func TestViewShowsDeleteConfirmStatus(t *testing.T) {
 	view := stripANSI(m.View())
 	if !strings.Contains(view, "Delete") {
 		t.Errorf("delete confirm view should contain 'Delete':\n%s", view)
+	}
+}
+
+// --- Issue #3 tests: template picker filtering ---
+
+// TestNKeyFiltersPickerToJournalAndKB asserts that pressing "n" with all 5
+// built-in templates loaded results in exactly 2 pickerTemplates: journal and kb.
+func TestNKeyFiltersPickerToJournalAndKB(t *testing.T) {
+	m := newTestModel()
+	builtins := tmpl.BuiltinTemplates()
+	for name, content := range builtins {
+		m.templates = append(m.templates, tmpl.Template{Name: name, Content: content})
+	}
+	if len(m.templates) != 5 {
+		t.Fatalf("expected 5 built-in templates, got %d", len(m.templates))
+	}
+
+	m = sendKey(m, "n")
+
+	if m.mode != ModeTemplatePicker {
+		t.Fatalf("n key: mode = %v, want ModeTemplatePicker", m.mode)
+	}
+	if len(m.pickerTemplates) != 2 {
+		names := make([]string, len(m.pickerTemplates))
+		for i, t := range m.pickerTemplates {
+			names[i] = t.Name
+		}
+		t.Errorf("pickerTemplates count = %d, want 2; names = %v", len(m.pickerTemplates), names)
+	}
+	for _, pt := range m.pickerTemplates {
+		if pt.Name != "journal" && pt.Name != "kb" {
+			t.Errorf("unexpected template in picker: %q", pt.Name)
+		}
+	}
+}
+
+// TestPickerViewShowsTypeHeader verifies the picker header says "Select Type".
+func TestPickerViewShowsTypeHeader(t *testing.T) {
+	m := newTestModel()
+	m.mode = ModeTemplatePicker
+	m.pickerTemplates = []tmpl.Template{
+		{Name: "journal"},
+		{Name: "kb"},
+	}
+	m.width = 80
+	m.height = 24
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "Select Type") {
+		t.Errorf("picker view should contain 'Select Type': %q", view)
+	}
+}
+
+// --- Issue #2 tests: journal creation flow ---
+
+// TestJournalTemplateSelectionBypassesVarMode verifies that selecting the journal
+// template does not enter ModeTemplateVars.
+func TestJournalTemplateSelectionBypassesVarMode(t *testing.T) {
+	journalContent := tmpl.BuiltinTemplates()["journal"]
+	m := newTestModel()
+	m.mode = ModeTemplatePicker
+	m.pickerTemplates = []tmpl.Template{
+		{Name: "journal", Content: journalContent},
+	}
+	m.pickerCursor = 0
+
+	m2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m3 := m2.(Model)
+
+	if m3.mode == ModeTemplateVars {
+		t.Error("journal selection should not enter ModeTemplateVars")
+	}
+	if m3.mode != ModeNormal {
+		t.Errorf("journal selection: mode = %v, want ModeNormal", m3.mode)
+	}
+	if cmd == nil {
+		t.Error("journal selection should return cmdJournalCreate")
+	}
+}
+
+// TestKBTemplateSelectionEntersVarMode verifies that selecting the kb template
+// (which has {{title}}) enters ModeTemplateVars.
+func TestKBTemplateSelectionEntersVarMode(t *testing.T) {
+	kbContent := tmpl.BuiltinTemplates()["kb"]
+	m := newTestModel()
+	m.mode = ModeTemplatePicker
+	m.pickerTemplates = []tmpl.Template{
+		{Name: "kb", Content: kbContent},
+	}
+	m.pickerCursor = 0
+
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m3 := m2.(Model)
+
+	if m3.mode != ModeTemplateVars {
+		t.Errorf("kb selection: mode = %v, want ModeTemplateVars", m3.mode)
+	}
+	if len(m3.varNames) == 0 {
+		t.Error("kb selection: varNames should not be empty (has {{title}})")
+	}
+}
+
+// TestKBTemplateNoBuiltinVarsPrompted verifies that built-in vars (date_short)
+// are not included in the var prompt after render-first.
+func TestKBTemplateNoBuiltinVarsPrompted(t *testing.T) {
+	kbContent := tmpl.BuiltinTemplates()["kb"]
+	m := newTestModel()
+	m.mode = ModeTemplatePicker
+	m.pickerTemplates = []tmpl.Template{
+		{Name: "kb", Content: kbContent},
+	}
+	m.pickerCursor = 0
+
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m3 := m2.(Model)
+
+	for _, v := range m3.varNames {
+		if v == "date_short" || v == "date" {
+			t.Errorf("built-in var %q should not appear in user prompts", v)
+		}
 	}
 }
 
