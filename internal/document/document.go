@@ -175,23 +175,36 @@ func ValidateFrontmatter(fm Frontmatter) error {
 	return nil
 }
 
+// dateNode returns a yaml.Node representing a date-only YAML timestamp.
+// Using a Node with !!timestamp tag ensures the value is output unquoted so
+// yaml.v3 can round-trip it back into time.Time via its timestamp formats.
+func dateNode(t time.Time) *yaml.Node {
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!timestamp",
+		Value: t.Format("2006-01-02"),
+	}
+}
+
 // RenderFrontmatter serialises a Frontmatter back to YAML between --- delimiters.
 func RenderFrontmatter(fm Frontmatter) (string, error) {
-	// Build ordered map to get predictable field order.
+	// Build ordered struct to get predictable field order and date-only format.
+	// Date fields use *yaml.Node with !!timestamp tag so they are emitted
+	// unquoted and round-trip correctly through yaml.v3.
 	type fmYAML struct {
+		Type     string                 `yaml:"type"`
 		Title    string                 `yaml:"title"`
 		Tags     []string               `yaml:"tags"`
-		Created  time.Time              `yaml:"created"`
-		Modified time.Time              `yaml:"modified"`
-		Type     string                 `yaml:"type"`
+		Created  *yaml.Node             `yaml:"created"`
+		Modified *yaml.Node             `yaml:"modified"`
 		Extra    map[string]interface{} `yaml:",inline"`
 	}
 	out := fmYAML{
+		Type:     fm.Type,
 		Title:    fm.Title,
 		Tags:     fm.Tags,
-		Created:  fm.Created,
-		Modified: fm.Modified,
-		Type:     fm.Type,
+		Created:  dateNode(fm.Created),
+		Modified: dateNode(fm.Modified),
 		Extra:    fm.Extra,
 	}
 	b, err := yaml.Marshal(out)

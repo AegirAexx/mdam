@@ -1,6 +1,6 @@
 # MadaM — Project Handoff
 
-> Complete project state as of Phase 5 + Issue #1 fix. All five phases are implemented and passing. Issue #1 (first-run initialization) is merged on branch `fix/issue-01`. This document is the single source of truth for any future session or collaborator picking up the project.
+> Complete project state as of Phase 5 + Issues #1 and #4 fixed. All five phases are implemented and passing. This document is the single source of truth for any future session or collaborator picking up the project.
 
 ---
 
@@ -40,7 +40,7 @@ These three commands are the mandatory gate after every change. Never commit wit
 | TODO sweep | `mdam todo sweep` or `:todo sweep` in TUI |
 | TODO archive | `mdam todo archive [--older-than N]` |
 | Template discovery | `mdam template list` / `mdam template show <name>` |
-| Template rendering | Variable interpolation: `{{date}}`, `{{title}}`, `{{author}}`, etc. |
+| Template rendering | Variable interpolation: `{{date_short}}`, `{{title}}`, `{{author}}`, etc. Caller-supplied vars take precedence over built-ins. |
 | Fuzzy search | `mdam search "query" [--tag T] [--type T] [--modified-after D]` |
 | Export (strip frontmatter) | `mdam export <file> [--to DIR]` |
 | Git status detection | `mdam status [--porcelain]` |
@@ -221,35 +221,49 @@ These items are explicitly out of scope for v1. See spec §9 for full discussion
 
 ---
 
-## 8. Phase Report Index
+## 8. Report Index
+
+### Phase kick-off reports (`docs/reports/kick-off/`)
 
 | Phase | Report | Key deliverable |
 |---|---|---|
-| 1 | `docs/phase-1-report.md` | Headless engine, full test suite |
-| 2 | `docs/phase-2-report.md` | BubbleTea TUI skeleton |
-| 3 | `docs/phase-3-report.md` | Real data wired, git status bar |
-| 4 | `docs/phase-4-report.md` | `$EDITOR` + lazygit handoff |
-| 5 | `docs/phase-5-report.md` | Theming, glamour preview, ambient findability |
+| 1 | `phase-1-report.md` | Headless engine, full test suite |
+| 2 | `phase-2-report.md` | BubbleTea TUI skeleton |
+| 3 | `phase-3-report.md` | Real data wired, git status bar |
+| 4 | `phase-4-report.md` | `$EDITOR` + lazygit handoff |
+| 5 | `phase-5-report.md` | Theming, glamour preview, ambient findability |
 
-## 9. Issue Fix Index
+### Issue fix reports (`docs/reports/issues/`)
 
 | Issue | Report | Summary |
 |---|---|---|
-| #1 | `docs/issue-reports/issue-001-report.md` | First-run initialization, path bug fixes, `internal/setup` package |
+| #1 | `issue-001-report.md` | First-run initialization, path bug fixes, `internal/setup` package |
 
 ---
 
 ## 9. Frontmatter Contract
 
-Every managed document requires these YAML frontmatter fields:
+Every managed document requires these YAML frontmatter fields. **Field order matters** — `RenderFrontmatter` always emits them in this order:
+
+```yaml
+---
+type: journal
+title: 2026-03-15
+tags: []
+created: 2026-03-15
+modified: 2026-03-15
+---
+```
 
 | Field | Type | Valid values |
 |---|---|---|
+| `type` | string | `journal`, `kb`, `todo`, `scratch`, `unsorted` — **first field** |
 | `title` | string | Any non-empty string |
 | `tags` | list | Empty list `[]` or string values |
-| `created` | ISO 8601 datetime | e.g. `2026-03-14T09:00:00Z` |
-| `modified` | ISO 8601 datetime | e.g. `2026-03-14T09:00:00Z` |
-| `type` | string | `journal`, `kb`, `todo`, `scratch`, `unsorted` |
+| `created` | date | `YYYY-MM-DD` (date-only, emitted as YAML `!!timestamp`) |
+| `modified` | date | `YYYY-MM-DD` (date-only, emitted as YAML `!!timestamp`) |
+
+**Parser accepts both formats:** `YYYY-MM-DD` and full ISO 8601 (`2026-03-15T12:32:26Z`) for backwards compatibility. New documents always emit date-only.
 
 Additional frontmatter fields are passed through without validation.
 

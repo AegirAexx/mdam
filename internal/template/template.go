@@ -88,17 +88,17 @@ func Render(t Template, vars map[string]string) (string, error) {
 	now := time.Now()
 	content := t.Content
 
-	// Resolve built-in variables.
+	// Resolve caller-supplied variables first so they take precedence over built-ins.
+	for k, v := range vars {
+		content = strings.ReplaceAll(content, "{{"+k+"}}", v)
+	}
+
+	// Resolve built-in variables for any remaining unresolved placeholders.
 	builtins := map[string]string{
 		"date":       now.UTC().Format(time.RFC3339),
 		"date_short": now.Format("2006-01-02"),
 	}
 	for k, v := range builtins {
-		content = strings.ReplaceAll(content, "{{"+k+"}}", v)
-	}
-
-	// Resolve caller-supplied variables.
-	for k, v := range vars {
 		content = strings.ReplaceAll(content, "{{"+k+"}}", v)
 	}
 
@@ -157,11 +157,11 @@ func WriteBuiltins(dir string) error {
 }
 
 var journalTemplate = `---
-title: Journal {{date_short}}
-tags: []
-created: {{date}}
-modified: {{date}}
 type: journal
+title: {{date_short}}
+tags: []
+created: {{date_short}}
+modified: {{date_short}}
 ---
 
 # Journal — {{date_short}}
@@ -174,11 +174,11 @@ type: journal
 `
 
 var kbTemplate = `---
+type: kb
 title: {{title}}
 tags: []
-created: {{date}}
-modified: {{date}}
-type: kb
+created: {{date_short}}
+modified: {{date_short}}
 ---
 
 # {{title}}
@@ -186,11 +186,11 @@ type: kb
 `
 
 var howtoTemplate = `---
+type: kb
 title: {{title}}
 tags: []
-created: {{date}}
-modified: {{date}}
-type: kb
+created: {{date_short}}
+modified: {{date_short}}
 kb_type: howto
 ---
 
@@ -205,11 +205,11 @@ kb_type: howto
 `
 
 var meetingTemplate = `---
+type: kb
 title: {{title}}
 tags: []
-created: {{date}}
-modified: {{date}}
-type: kb
+created: {{date_short}}
+modified: {{date_short}}
 kb_type: meeting
 ---
 
@@ -228,11 +228,11 @@ kb_type: meeting
 `
 
 var scratchTemplate = `---
+type: scratch
 title: Scratch Pad
 tags: []
-created: {{date}}
-modified: {{date}}
-type: scratch
+created: {{date_short}}
+modified: {{date_short}}
 ---
 
 `
