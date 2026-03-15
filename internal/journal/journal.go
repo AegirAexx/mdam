@@ -158,7 +158,7 @@ func PastEntries(journalDir string) ([]string, error) {
 func ScaffoldFrontmatter(date time.Time) document.Frontmatter {
 	now := time.Now().UTC()
 	return document.Frontmatter{
-		Title:    "Journal " + date.Format(DateFormat),
+		Title:    date.Format(DateFormat),
 		Tags:     []string{},
 		Created:  now,
 		Modified: now,

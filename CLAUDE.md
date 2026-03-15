@@ -55,17 +55,17 @@ Every managed document has YAML frontmatter. Field order matters for consistency
 
 ```yaml
 ---
-type: journal              # Required. One of: journal, kb, todo, scratch, unsorted
+type: journal              # Required. One of: journal, kb, todo, scratch, unsorted — FIRST field
 title: 2026-03-15          # Required. Human-readable title
 tags: []                   # Required. List of strings
-created: 2026-03-15        # Required. YYYY-MM-DD format
-modified: 2026-03-15       # Required. YYYY-MM-DD format
+created: 2026-03-15        # Required. YYYY-MM-DD (emitted as YAML !!timestamp)
+modified: 2026-03-15       # Required. YYYY-MM-DD (emitted as YAML !!timestamp)
 ---
 ```
 
 Additional fields are passed through without validation.
 
-**Date format:** Use `YYYY-MM-DD` (date-only) for `created` and `modified`. The parser must also accept full ISO 8601 (`2026-03-15T12:32:26Z`) for backwards compatibility.
+**Date format:** New documents always emit `YYYY-MM-DD` (date-only) as an unquoted YAML `!!timestamp`. The parser also accepts full ISO 8601 (`2026-03-15T12:32:26Z`) for backwards compatibility. `RenderFrontmatter` uses `*yaml.Node{Tag: "!!timestamp"}` to avoid quoting.
 
 ## Folder Structure Convention
 

@@ -152,9 +152,9 @@ func cmdEnsureAndOpenScratch(cfg config.Config) tea.Cmd {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				return editorReturnMsg{err: fmt.Errorf("creating scratch dir: %w", err)}
 			}
-			now := time.Now().UTC().Format(time.RFC3339)
+			now := time.Now().Format("2006-01-02")
 			content := fmt.Sprintf(
-				"---\ntitle: Scratch Pad\ntags: []\ncreated: %s\nmodified: %s\ntype: scratch\n---\n",
+				"---\ntype: scratch\ntitle: Scratch Pad\ntags: []\ncreated: %s\nmodified: %s\n---\n",
 				now, now,
 			)
 			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

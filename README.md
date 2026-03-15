@@ -184,11 +184,11 @@ Every managed document requires these YAML frontmatter fields:
 
 ```yaml
 ---
+type: kb   # journal | kb | todo | scratch | unsorted
 title: "My Document"
 tags: [devops, nginx]
-created: 2026-03-14T09:00:00Z
-modified: 2026-03-14T09:00:00Z
-type: kb   # journal | kb | todo | scratch | unsorted
+created: 2026-03-14
+modified: 2026-03-14
 ---
 ```
 
@@ -260,7 +260,9 @@ mdam/
 │   ├── KEYBINDINGS.md          # TUI keybinding reference
 │   ├── HANDOFF.md              # Complete project state for future sessions
 │   ├── issues/                 # Bug reports and feature requests
-│   ├── kick-off-reports/       # Phase implementation reports (1–5)
+│   ├── reports/
+│   │   ├── kick-off/           # Phase implementation reports (1–5)
+│   │   └── issues/             # Per-issue fix reports
 │   └── specs/
 │       └── mdam-spec-v1.md     # Full project specification
 ├── CLAUDE.md          # Agent context and project rules
@@ -281,12 +283,8 @@ go test -v ./internal/todo/...       # Package-specific tests
 
 - [Project Specification](docs/specs/mdam-spec-v1.md) — Full feature spec, architecture, and execution plan
 - [Keybindings](docs/KEYBINDINGS.md) — TUI keybinding reference
-- [Kick Off | Phase 1 Report](docs/kick-off-reports/phase-1-report.md) — Headless engine implementation
-- [Kick Off | Phase 2 Report](docs/kick-off-reports/phase-2-report.md) — TUI skeleton implementation
-- [Kick Off | Phase 3 Report](docs/kick-off-reports/phase-3-report.md) — Integration implementation
-- [Kick Off | Phase 4 Report](docs/kick-off-reports/phase-4-report.md) — Editor handoff implementation
-- [Kick Off | Phase 5 Report](docs/kick-off-reports/phase-5-report.md) — Polish and visual design implementation
 - [Handoff](docs/HANDOFF.md) — Complete project state for future sessions
+- [Reports](docs/reports/) — Phase kick-off and issue fix reports
 
 ## License
 
