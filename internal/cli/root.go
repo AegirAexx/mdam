@@ -2,7 +2,11 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/AegirAexx/mdam/internal/config"
+	"github.com/AegirAexx/mdam/internal/setup"
 	"github.com/AegirAexx/mdam/tui"
 	"github.com/spf13/cobra"
 )
@@ -32,14 +36,30 @@ func init() {
 }
 
 func initConfig() {
-	var err error
-	if cfgFile != "" {
-		cfg, err = config.LoadFrom(cfgFile)
-	} else {
-		cfg, err = config.Load()
+	cfgPath := cfgFile
+	if cfgPath == "" {
+		p, err := config.DefaultConfigPath()
+		if err != nil {
+			cfg, _ = config.LoadFrom("/dev/null")
+			return
+		}
+		cfgPath = p
 	}
+
+	var err error
+	cfg, err = config.LoadFrom(cfgPath)
 	if err != nil {
-		// Non-fatal: fall back to defaults.
 		cfg, _ = config.LoadFrom("/dev/null")
+	}
+
+	if setup.IsFirstRun(cfgPath, cfg) {
+		cfg, err = setup.Run(cfgPath, cfg, os.Stdin, os.Stderr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mdam: setup: %v\n", err)
+		}
+	} else {
+		for _, w := range setup.ValidateConfig(cfg) {
+			fmt.Fprintln(os.Stderr, "mdam: config: "+w)
+		}
 	}
 }
