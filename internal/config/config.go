@@ -37,15 +37,16 @@ type JournalConfig struct {
 
 // Config is the top-level mdam configuration.
 type Config struct {
-	Editor    string        `mapstructure:"editor"`
-	Author    string        `mapstructure:"author"`
-	BaseDir   string        `mapstructure:"base_dir"`
-	ExportDir string        `mapstructure:"export_dir"`
-	Theme     string        `mapstructure:"theme"`
-	Import    ImportConfig  `mapstructure:"import"`
-	Git       GitConfig     `mapstructure:"git"`
-	Todo      TodoConfig    `mapstructure:"todo"`
-	Journal   JournalConfig `mapstructure:"journal"`
+	Editor     string        `mapstructure:"editor"`
+	Author     string        `mapstructure:"author"`
+	BaseDir    string        `mapstructure:"base_dir"`
+	ExportDir  string        `mapstructure:"export_dir"`
+	Theme      string        `mapstructure:"theme"`
+	NerdFonts  bool          `mapstructure:"nerd_fonts"`
+	Import     ImportConfig  `mapstructure:"import"`
+	Git        GitConfig     `mapstructure:"git"`
+	Todo       TodoConfig    `mapstructure:"todo"`
+	Journal    JournalConfig `mapstructure:"journal"`
 }
 
 // DefaultConfigPath returns the default path for the config file.
@@ -101,6 +102,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("base_dir", filepath.Join(home, "notes"))
 	v.SetDefault("export_dir", filepath.Join(home, "Downloads"))
 	v.SetDefault("theme", "tokyonight")
+	v.SetDefault("nerd_fonts", false)
 
 	v.SetDefault("import.inbox_dir", filepath.Join(home, "notes", ".inbox"))
 	v.SetDefault("import.auto_fix", false)
@@ -163,4 +165,11 @@ func (c Config) ScratchPath() string {
 // ArchivePath returns the path for the TODO archive file.
 func (c Config) ArchivePath() string {
 	return filepath.Join(c.BaseDir, "archive.md")
+}
+
+// PinsPath returns the path for the pinned documents file.
+// Stored alongside the config, not in BaseDir, so pins survive BaseDir changes.
+func (c Config) PinsPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "mdam", "pins.json")
 }

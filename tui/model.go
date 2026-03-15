@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/AegirAexx/mdam/internal/config"
@@ -15,6 +17,9 @@ import (
 	tmpl "github.com/AegirAexx/mdam/internal/template"
 	"github.com/AegirAexx/mdam/internal/todo"
 )
+
+// spinnerFrames is the loading animation sequence.
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // Model is the root BubbleTea model for the mdam TUI.
 // It owns all application state for the current render cycle.
@@ -32,6 +37,12 @@ type Model struct {
 
 	// keys holds the active keybindings.
 	keys KeyMap
+
+	// theme holds all lipgloss styles for the active color palette.
+	theme Theme
+
+	// icons holds the glyph set (Nerd Font or ASCII fallback).
+	icons Icons
 
 	// --- Document state ---
 	docs      []search.Result // all documents from last scan
@@ -58,8 +69,27 @@ type Model struct {
 	varCursor    int      // index of var currently being filled
 	varInput     textinput.Model
 
+	// --- Preview viewport ---
+	preview viewport.Model
+
+	// --- Pinned documents ---
+	pinnedPaths map[string]bool // set of pinned absolute paths
+
+	// --- Delete confirmation ---
+	deleteConfirmPath string
+
+	// --- Smart filter ---
+	smartFilter SmartFilter
+
+	// --- Tag browser ---
+	tagEntries []tagEntry
+	tagCursor  int
+
+	// --- Spinner ---
+	spinnerFrame int
+
 	// --- Loading state ---
-	loading bool
+	loading  bool
 	errorMsg string
 
 	// --- Chord state ---
@@ -93,19 +123,30 @@ func New(cfg config.Config) Model {
 	varIn := textinput.New()
 	varIn.CharLimit = 256
 
+	var icons Icons
+	if cfg.NerdFonts {
+		icons = DefaultIcons()
+	} else {
+		icons = PlainIcons()
+	}
+
 	return Model{
 		cfg:         cfg,
 		mode:        ModeNormal,
 		activePanel: PanelFiles,
 		activeView:  ViewAll,
 		keys:        DefaultKeyMap(),
+		theme:       NewTheme(cfg.Theme),
+		icons:       icons,
 		gitFileMap:  make(map[string]git.FileStatus),
+		pinnedPaths: make(map[string]bool),
 		loading:     true,
 		cmdInput:    cmd,
 		searchInput: srch,
 		varInput:    varIn,
 		width:       80,
 		height:      24,
+		preview:     viewport.New(53, 20), // ~67% of 80 width, 20 rows
 	}
 }
 
@@ -115,6 +156,8 @@ func (m Model) Init() tea.Cmd {
 		cmdLoadDocs(m.cfg.BaseDir),
 		cmdLoadTodos(m.cfg.TodoPath()),
 		cmdLoadGitStatus(m.cfg.BaseDir),
+		cmdLoadPins(m.cfg.PinsPath()),
+		cmdTick(),
 	)
 }
 
@@ -124,6 +167,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Resize preview viewport to match new terminal dimensions.
+		leftWidth := m.width / 3
+		rightWidth := m.width - leftWidth - 1
+		previewHeight := m.height - 2 - 1 // content minus status/sep/header
+		if previewHeight < 1 {
+			previewHeight = 1
+		}
+		todoHeight := len(m.todos) + 2
+		vp := previewHeight - todoHeight
+		if vp < 1 {
+			vp = 1
+		}
+		m.preview.Width = rightWidth
+		m.preview.Height = vp
+		return m, nil
+
+	// --- Spinner ---
+
+	case tickMsg:
+		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+		if m.loading {
+			return m, cmdTick()
+		}
 		return m, nil
 
 	// --- Async message handlers ---
@@ -204,6 +270,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmdLoadDocs(m.cfg.BaseDir),
 			cmdLoadGitStatus(m.cfg.BaseDir),
 			cmdLoadTodos(m.cfg.TodoPath()),
+			cmdTick(),
 		)
 
 	case scratchReadyMsg:
@@ -213,6 +280,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, cmdOpenEditor(msg.path, editor)
+
+	case previewReadyMsg:
+		m.preview.SetContent(msg.content)
+		return m, nil
+
+	case pinsLoadedMsg:
+		if msg.err == nil {
+			m.pinnedPaths = msg.pins
+		}
+		return m, nil
+
+	case tagIndexMsg:
+		m.tagEntries = msg.entries
+		return m, nil
+
+	case deleteDoneMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("delete failed: %v", msg.err)
+		} else {
+			m.statusMsg = "deleted " + filepath.Base(msg.path)
+		}
+		m.mode = ModeNormal
+		m.deleteConfirmPath = ""
+		return m, cmdLoadDocs(m.cfg.BaseDir)
 
 	// --- Key events ---
 
@@ -228,6 +319,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTemplatePicker(msg)
 		case ModeTemplateVars:
 			return m.updateTemplateVars(msg)
+		case ModeDeleteConfirm:
+			return m.updateDeleteConfirm(msg)
 		}
 	}
 	return m, nil
@@ -296,7 +389,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Number keys — view switching
 	case k == "1":
-		m.activeView = ViewAll
+		m.activeView = ViewDashboard
 		m.searchActive = false
 		m.fileCursor = 0
 		m.statusMsg = ""
@@ -319,6 +412,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchActive = false
 		m.fileCursor = 0
 		m.statusMsg = ""
+	case k == "6":
+		m.activeView = ViewTags
+		m.searchActive = false
+		m.tagCursor = 0
+		m.statusMsg = ""
+		return m, cmdBuildTagIndex(m.docs)
 
 	// Open in $EDITOR
 	case k == "enter":
@@ -336,12 +435,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k == "R":
 		m.loading = true
 		m.statusMsg = ""
-		return m, tea.Batch(cmdLoadDocs(m.cfg.BaseDir), cmdLoadGitStatus(m.cfg.BaseDir))
+		return m, tea.Batch(cmdLoadDocs(m.cfg.BaseDir), cmdLoadGitStatus(m.cfg.BaseDir), cmdTick())
 
 	// New document
 	case k == "n":
 		if len(m.templates) == 0 {
-			// Try to load built-ins if templates dir has none.
 			builtins := tmpl.BuiltinTemplates()
 			for name, content := range builtins {
 				m.templates = append(m.templates, tmpl.Template{Name: name, Content: content})
@@ -362,18 +460,67 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = "no document selected"
 
+	// Pin / unpin
+	case k == "p":
+		if selected := m.selectedDoc(); selected != "" {
+			m.pinnedPaths = togglePin(m.pinnedPaths, selected)
+			return m, cmdSavePins(m.cfg.PinsPath(), m.pinnedPaths)
+		}
+		m.statusMsg = "no document selected"
+
+	// Smart filter cycling
+	case k == "f":
+		m.smartFilter = (m.smartFilter + 1) % (SmartFilterInbox + 1)
+		m.fileCursor = 0
+		if m.smartFilter == SmartFilterNone {
+			m.statusMsg = ""
+		} else {
+			m.statusMsg = m.smartFilter.String()
+		}
+
+	// Delete (with confirmation)
+	case k == "d":
+		if selected := m.selectedDoc(); selected != "" {
+			m.mode = ModeDeleteConfirm
+			m.deleteConfirmPath = selected
+			m.statusMsg = fmt.Sprintf("Delete %s? (y/n)", filepath.Base(selected))
+		} else {
+			m.statusMsg = "no document selected"
+		}
+
 	// Lazygit handoff
 	case k == "ctrl+g":
 		if m.cfg.Git.Lazygit {
 			return m, cmdOpenLazygit(m.cfg.BaseDir)
 		}
 		m.statusMsg = "lazygit disabled (git.lazygit = false)"
-
-	// Delete — Phase 3 stub (destructive; full impl deferred)
-	case k == "d":
-		m.statusMsg = "delete — not yet implemented"
 	}
 
+	// Fire preview load when cursor moves in file panel.
+	if m.activePanel == PanelFiles {
+		if selected := m.selectedDoc(); selected != "" {
+			return m, cmdLoadPreview(selected, m.theme.GlamourStyle, m.preview.Width)
+		}
+	}
+
+	return m, nil
+}
+
+// updateDeleteConfirm handles key events when waiting for delete confirmation.
+func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y":
+		m.mode = ModeNormal
+		m.statusMsg = ""
+		return m, cmdDeleteDoc(m.deleteConfirmPath)
+	case "n", "esc":
+		m.mode = ModeNormal
+		m.deleteConfirmPath = ""
+		m.statusMsg = ""
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	}
 	return m, nil
 }
 
@@ -454,7 +601,6 @@ func (m Model) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.pendingTmpl = m.templates[m.pickerCursor]
-		// Find unresolved variables (excluding builtins already handled by Render).
 		rawVars := tmpl.UnresolvedVars(m.pendingTmpl.Content)
 		m.varNames = nil
 		seen := map[string]bool{}
@@ -466,7 +612,6 @@ func (m Model) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if len(m.varNames) == 0 {
-			// No variables to fill; create immediately.
 			return m, cmdCreateDoc(m.pendingTmpl, map[string]string{}, m.cfg)
 		}
 		m.varValues = make([]string, len(m.varNames))
@@ -495,7 +640,6 @@ func (m Model) updateTemplateVars(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.varValues[m.varCursor] = m.varInput.Value()
 		m.varCursor++
 		if m.varCursor >= len(m.varNames) {
-			// All vars collected; create document.
 			vars := make(map[string]string, len(m.varNames))
 			for i, name := range m.varNames {
 				vars[name] = m.varValues[i]
@@ -503,7 +647,6 @@ func (m Model) updateTemplateVars(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.varInput.Blur()
 			return m, cmdCreateDoc(m.pendingTmpl, vars, m.cfg)
 		}
-		// Advance to next variable.
 		m.varInput.SetValue("")
 		m.varInput.Placeholder = m.varNames[m.varCursor]
 		return m, nil
@@ -565,8 +708,40 @@ func (m Model) visibleDocs() []search.Result {
 		return filterByType(m.docs, "kb")
 	case ViewRecent:
 		return recentDocs(m.docs, 20)
-	default:
+	case ViewTags:
+		return nil // tag browser uses tagEntries, not docs
+	default: // ViewAll and ViewDashboard both use the full doc list (with smart filter for ViewAll)
+		if m.activeView == ViewAll {
+			return applySmartFilter(m.docs, m.smartFilter)
+		}
 		return m.docs
+	}
+}
+
+// applySmartFilter post-filters docs based on the active SmartFilter.
+func applySmartFilter(docs []search.Result, f SmartFilter) []search.Result {
+	switch f {
+	case SmartFilterUntagged:
+		var out []search.Result
+		for _, d := range docs {
+			if len(d.Frontmatter.Tags) == 0 {
+				out = append(out, d)
+			}
+		}
+		return out
+	case SmartFilterStaleWeek:
+		cutoff := time.Now().AddDate(0, 0, -7)
+		var out []search.Result
+		for _, d := range docs {
+			if d.Frontmatter.Modified.Before(cutoff) {
+				out = append(out, d)
+			}
+		}
+		return out
+	case SmartFilterInbox:
+		return filterByType(docs, "unsorted")
+	default:
+		return docs
 	}
 }
 
@@ -599,9 +774,15 @@ func recentDocs(docs []search.Result, n int) []search.Result {
 func (m Model) moveCursorDown() Model {
 	switch m.activePanel {
 	case PanelFiles:
-		docs := m.visibleDocs()
-		if m.fileCursor < len(docs)-1 {
-			m.fileCursor++
+		if m.activeView == ViewTags {
+			if m.tagCursor < len(m.tagEntries)-1 {
+				m.tagCursor++
+			}
+		} else {
+			docs := m.visibleDocs()
+			if m.fileCursor < len(docs)-1 {
+				m.fileCursor++
+			}
 		}
 	case PanelTodo:
 		if m.todoCursor < len(m.todos)-1 {
@@ -614,8 +795,14 @@ func (m Model) moveCursorDown() Model {
 func (m Model) moveCursorUp() Model {
 	switch m.activePanel {
 	case PanelFiles:
-		if m.fileCursor > 0 {
-			m.fileCursor--
+		if m.activeView == ViewTags {
+			if m.tagCursor > 0 {
+				m.tagCursor--
+			}
+		} else {
+			if m.fileCursor > 0 {
+				m.fileCursor--
+			}
 		}
 	case PanelTodo:
 		if m.todoCursor > 0 {
@@ -628,7 +815,11 @@ func (m Model) moveCursorUp() Model {
 func (m Model) jumpTop() Model {
 	switch m.activePanel {
 	case PanelFiles:
-		m.fileCursor = 0
+		if m.activeView == ViewTags {
+			m.tagCursor = 0
+		} else {
+			m.fileCursor = 0
+		}
 	case PanelTodo:
 		m.todoCursor = 0
 	}
@@ -638,9 +829,15 @@ func (m Model) jumpTop() Model {
 func (m Model) jumpBottom() Model {
 	switch m.activePanel {
 	case PanelFiles:
-		docs := m.visibleDocs()
-		if len(docs) > 0 {
-			m.fileCursor = len(docs) - 1
+		if m.activeView == ViewTags {
+			if len(m.tagEntries) > 0 {
+				m.tagCursor = len(m.tagEntries) - 1
+			}
+		} else {
+			docs := m.visibleDocs()
+			if len(docs) > 0 {
+				m.fileCursor = len(docs) - 1
+			}
 		}
 	case PanelTodo:
 		if len(m.todos) > 0 {

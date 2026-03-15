@@ -15,6 +15,8 @@ const (
 	ModeTemplatePicker
 	// ModeTemplateVars collects values for unresolved template variables.
 	ModeTemplateVars
+	// ModeDeleteConfirm prompts the user to confirm a document deletion.
+	ModeDeleteConfirm
 )
 
 func (m Mode) String() string {
@@ -27,6 +29,8 @@ func (m Mode) String() string {
 		return "SEARCH"
 	case ModeTemplatePicker, ModeTemplateVars:
 		return "NEW DOC"
+	case ModeDeleteConfirm:
+		return "DELETE?"
 	default:
 		return "UNKNOWN"
 	}
@@ -36,11 +40,13 @@ func (m Mode) String() string {
 type View int
 
 const (
-	ViewAll     View = iota // all documents (default)
-	ViewJournal             // journal entries only
-	ViewKB                  // knowledge base only
-	ViewTodo                // focus TODO panel
-	ViewRecent              // top 20 by modified date
+	ViewAll       View = iota // all documents (default, startup state)
+	ViewJournal               // journal entries only
+	ViewKB                    // knowledge base only
+	ViewTodo                  // focus TODO panel
+	ViewRecent                // top 20 by modified date
+	ViewDashboard             // today's context dashboard (key 1)
+	ViewTags                  // tag browser (key 6)
 )
 
 // PanelID identifies which panel currently has focus.
@@ -74,4 +80,27 @@ func (p PanelID) next() PanelID {
 // prev returns the previous panel in cycle order.
 func (p PanelID) prev() PanelID {
 	return (p + panelCount - 1) % panelCount
+}
+
+// SmartFilter is a post-filter applied over ViewAll documents.
+type SmartFilter int
+
+const (
+	SmartFilterNone     SmartFilter = iota // no filter — show all
+	SmartFilterUntagged                    // documents with no tags
+	SmartFilterStaleWeek                   // documents not modified in >7 days
+	SmartFilterInbox                       // type: unsorted (inbox items)
+)
+
+func (f SmartFilter) String() string {
+	switch f {
+	case SmartFilterUntagged:
+		return "filter: untagged"
+	case SmartFilterStaleWeek:
+		return "filter: stale (>7 days)"
+	case SmartFilterInbox:
+		return "filter: inbox"
+	default:
+		return ""
+	}
 }

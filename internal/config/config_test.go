@@ -116,6 +116,25 @@ func TestExpandHome(t *testing.T) {
 	}
 }
 
+func TestNerdFontsDefault(t *testing.T) {
+	cfg, err := LoadFrom("/does/not/exist/config.yml")
+	if err != nil {
+		t.Fatalf("LoadFrom error = %v", err)
+	}
+	if cfg.NerdFonts {
+		t.Error("NerdFonts default = true, want false")
+	}
+}
+
+func TestPinsPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	cfg := Config{}
+	want := filepath.Join(home, ".config", "mdam", "pins.json")
+	if got := cfg.PinsPath(); got != want {
+		t.Errorf("PinsPath() = %q, want %q", got, want)
+	}
+}
+
 func TestConfigDirs(t *testing.T) {
 	cfg := Config{BaseDir: "/base"}
 	if cfg.JournalDir() != "/base/journal" {

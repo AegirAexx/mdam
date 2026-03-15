@@ -6,7 +6,7 @@ MadaM is an administration and routing tool — it organizes, navigates, and aut
 
 ## Status
 
-**Pre-release — Phase 4 of 5 complete**
+**All 5 phases complete — production-ready**
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -14,9 +14,9 @@ MadaM is an administration and routing tool — it organizes, navigates, and aut
 | 2 | BubbleTea TUI skeleton (event loop, keybindings, panel layout, dummy data) | Complete |
 | 3 | Integration (real data, git status bar, search, export, template picker wired) | Complete |
 | 4 | Editor handoff (`$EDITOR` + lazygit via `tea.ExecProcess`, suspend/resume) | Complete |
-| 5 | Polish (lipgloss styling, glamour preview, theming, ambient findability views) | Pending |
+| 5 | Polish (lipgloss styling, glamour preview, theming, ambient findability views) | Complete |
 
-The TUI is fully functional but unstyled. All core engine operations work headlessly via CLI subcommands. Press `Enter` on any document to open it in your editor.
+All core engine operations work headlessly via CLI subcommands. The TUI is fully polished with theming, markdown preview, and ambient findability views. Press `Enter` on any document to open it in your editor.
 
 ## Features
 
@@ -30,6 +30,14 @@ The TUI is fully functional but unstyled. All core engine operations work headle
 - **Export** — Strip frontmatter and share clean markdown
 - **Git integration** — Status awareness in the TUI, lazygit handoff via `ctrl+g`
 - **Dual interface** — Full TUI and headless CLI with UNIX-style flags and subcommands
+- **Color theming** — Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula
+- **Markdown preview** — Glamour-rendered live preview in the viewport panel
+- **Nerd Font icons** — Optional icon set for file types, git status, and TODO states (`nerd_fonts: false` default)
+- **Dashboard** (`1`) — Today's journal, open TODO count, pinned docs, and recent documents
+- **Tag browser** (`6`) — All tags with document counts; drill into any tag to list its documents
+- **Smart filter** (`f`) — Cycle through Untagged / Stale / Inbox post-filters on the document list
+- **Pin / unpin** (`p`) — Bookmark any document; pins persist to `~/.config/mdam/pins.json`
+- **Delete with confirmation** (`d` → `y`/`n`) — Safe delete mode prevents accidental removal
 
 ## Requirements
 
@@ -95,16 +103,20 @@ Run `mdam` with no subcommand to launch the interactive TUI.
 | `h` / `l` | Previous / next panel |
 | `Tab` / `Shift+Tab` | Cycle panel focus |
 | `gg` / `G` | Jump to top / bottom |
-| `1` | All documents |
+| `1` | Dashboard (today's context) |
 | `2` | Journal entries |
 | `3` | Knowledge base |
 | `4` | TODO panel |
 | `5` | Recently modified |
+| `6` | Tag browser |
 | `/` | Fuzzy search |
 | `:` | Command mode |
 | `?` | Help overlay |
 | `n` | New document (template picker) |
+| `d` | Delete selected document (prompts `y`/`n`) |
 | `e` | Export selected document |
+| `p` | Pin / unpin selected document |
+| `f` | Cycle smart filter (None → Untagged → Stale → Inbox) |
 | `R` | Re-scan filesystem |
 | `Enter` | Open selected document in `$EDITOR` |
 | `ctrl+g` | Open lazygit |
@@ -142,6 +154,9 @@ export_dir: ~/Downloads
 import:
   inbox_dir: ~/notes/.inbox
   auto_fix: false
+
+theme: tokyonight                     # nord, gruvbox, catppuccin, dracula
+nerd_fonts: false                     # set true if your terminal font has Nerd Font glyphs
 
 git:
   enabled: true
@@ -228,20 +243,28 @@ mdam/
 │   ├── export/        # Frontmatter stripping for sharing
 │   └── git/           # Git status detection (shells out to git)
 ├── tui/               # BubbleTea TUI
-│   ├── mode.go        # Mode, PanelID, View types
-│   ├── keys.go        # KeyMap and DefaultKeyMap()
-│   ├── messages.go    # Async message types for engine responses
-│   ├── commands.go    # tea.Cmd factories wrapping engine calls
-│   ├── model.go       # Model struct, Init/Update, all mode handlers
-│   ├── view.go        # View(), panel rendering, status bar
-│   └── tui.go         # Run(cfg) entry point
+│   ├── mode.go           # Mode, PanelID, View types
+│   ├── keys.go           # KeyMap and DefaultKeyMap()
+│   ├── messages.go       # Async message types for engine responses
+│   ├── commands.go       # tea.Cmd factories wrapping engine calls
+│   ├── model.go          # Model struct, Init/Update, all mode handlers
+│   ├── view.go           # View(), panel rendering, status bar
+│   ├── view_dashboard.go # Dashboard view (key 1)
+│   ├── view_tags.go      # Tag browser view (key 6)
+│   ├── theme.go          # Theme struct, NewTheme(), 5 palettes
+│   ├── icons.go          # Icons struct, DefaultIcons(), PlainIcons()
+│   ├── pins.go           # loadPins/savePins/togglePin
+│   ├── delete.go         # cmdDeleteDoc, deleteDoneMsg
+│   └── tui.go            # Run(cfg) entry point
 ├── docs/
 │   ├── mdam-spec-v1.md     # Full project specification
 │   ├── KEYBINDINGS.md      # TUI keybinding reference
+│   ├── HANDOFF.md          # Comprehensive project state for future sessions
 │   ├── phase-1-report.md   # Phase 1 implementation report
 │   ├── phase-2-report.md   # Phase 2 implementation report
 │   ├── phase-3-report.md   # Phase 3 implementation report
-│   └── phase-4-report.md   # Phase 4 implementation report
+│   ├── phase-4-report.md   # Phase 4 implementation report
+│   └── phase-5-report.md   # Phase 5 implementation report
 ├── CLAUDE.md          # Agent context and project rules
 └── go.mod
 ```
@@ -249,7 +272,7 @@ mdam/
 ## Development
 
 ```bash
-go test ./...                        # Run all tests
+go test ./...                        # Run all tests (119 TUI tests + engine tests)
 go vet ./...                         # Static analysis
 go build -o mdam ./cmd/mdam          # Build binary
 go test -v ./tui/...                 # TUI tests with output
@@ -264,6 +287,8 @@ go test -v ./internal/todo/...       # Package-specific tests
 - [Phase 2 Report](docs/phase-2-report.md) — TUI skeleton implementation
 - [Phase 3 Report](docs/phase-3-report.md) — Integration implementation
 - [Phase 4 Report](docs/phase-4-report.md) — Editor handoff implementation
+- [Phase 5 Report](docs/phase-5-report.md) — Polish and visual design implementation
+- [Handoff](docs/HANDOFF.md) — Complete project state for future sessions
 
 ## License
 

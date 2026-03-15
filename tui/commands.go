@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/AegirAexx/mdam/internal/config"
@@ -159,6 +160,52 @@ func cmdEnsureAndOpenScratch(cfg config.Config) tea.Cmd {
 		}
 		return scratchReadyMsg{path: path}
 	}
+}
+
+// cmdLoadPreview reads a file and renders it with glamour, returning previewReadyMsg.
+func cmdLoadPreview(path, glamourStyle string, width int) tea.Cmd {
+	return func() tea.Msg {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return previewReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
+		}
+		rendered, err := glamour.Render(string(content), glamourStyle)
+		if err != nil {
+			// Fallback: show raw content.
+			return previewReadyMsg{content: string(content)}
+		}
+		return previewReadyMsg{content: rendered}
+	}
+}
+
+// cmdLoadPins reads the pinned document paths from pinsPath.
+func cmdLoadPins(pinsPath string) tea.Cmd {
+	return func() tea.Msg {
+		pins, err := loadPins(pinsPath)
+		return pinsLoadedMsg{pins: pins, err: err}
+	}
+}
+
+// cmdSavePins writes the pinned paths to pinsPath asynchronously.
+func cmdSavePins(pinsPath string, pins map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		_ = savePins(pinsPath, pins) // errors silently dropped — pins are best-effort
+		return nil
+	}
+}
+
+// cmdBuildTagIndex builds the tag index from docs and sends tagIndexMsg.
+func cmdBuildTagIndex(docs []search.Result) tea.Cmd {
+	return func() tea.Msg {
+		return tagIndexMsg{entries: buildTagIndex(docs)}
+	}
+}
+
+// cmdTick returns a one-shot 100 ms timer for the loading spinner animation.
+func cmdTick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(_ time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
 // toKebabCase converts a string to kebab-case (lowercase, spaces → hyphens).

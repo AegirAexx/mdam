@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/AegirAexx/mdam/internal/git"
 )
 
 // View renders the current model state to a string.
-// Phase 2/3: plain text layout, no lipgloss styling.
-// Phase 5 will apply lipgloss styling and Nerd Font icons.
 func (m Model) View() string {
 	if m.showHelp {
 		return m.viewHelp()
@@ -20,6 +20,12 @@ func (m Model) View() string {
 	}
 	if m.mode == ModeTemplateVars {
 		return m.viewTemplateVars()
+	}
+	if m.activeView == ViewDashboard {
+		return m.renderDashboard()
+	}
+	if m.activeView == ViewTags {
+		return m.renderTagBrowser()
 	}
 
 	var b strings.Builder
@@ -40,6 +46,7 @@ func (m Model) View() string {
 	leftLines := splitLines(left, contentHeight)
 	rightLines := splitLines(right, contentHeight)
 
+	divider := m.theme.Divider.Render("│")
 	for i := 0; i < contentHeight; i++ {
 		l := ""
 		if i < len(leftLines) {
@@ -50,12 +57,12 @@ func (m Model) View() string {
 			r = rightLines[i]
 		}
 		b.WriteString(padRight(l, leftWidth))
-		b.WriteString("│")
+		b.WriteString(divider)
 		b.WriteString(r)
 		b.WriteString("\n")
 	}
 
-	b.WriteString(strings.Repeat("─", m.width))
+	b.WriteString(m.theme.Divider.Render(strings.Repeat("─", m.width)))
 	b.WriteString("\n")
 	b.WriteString(m.renderStatusBar())
 
@@ -65,7 +72,7 @@ func (m Model) View() string {
 // renderFilePanel renders the files list panel with real document data.
 func (m Model) renderFilePanel(width, height int) string {
 	focused := m.activePanel == PanelFiles
-	title := panelHeader("Files", focused, width)
+	title := styledPanelHeader("Files", focused, width, m.theme, m.icons)
 
 	var lines []string
 	lines = append(lines, title)
@@ -73,13 +80,20 @@ func (m Model) renderFilePanel(width, height int) string {
 	docs := m.visibleDocs()
 
 	if m.loading {
-		lines = append(lines, "  scanning…")
+		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+		lines = append(lines, "  "+frame+" scanning…")
 		return strings.Join(lines, "\n")
 	}
 
 	if m.errorMsg != "" {
-		lines = append(lines, truncate("  "+m.errorMsg, width-1))
+		lines = append(lines, m.theme.GitModified.Render(truncate("  "+m.errorMsg, width-1)))
 		return strings.Join(lines, "\n")
+	}
+
+	// Smart filter indicator bar (ViewAll only).
+	if m.activeView == ViewAll && m.smartFilter != SmartFilterNone {
+		bar := m.theme.FilterBar.Render(" " + m.icons.Filter + " " + m.smartFilter.String() + " ")
+		lines = append(lines, truncate(bar, width-1))
 	}
 
 	if len(docs) == 0 {
@@ -87,61 +101,125 @@ func (m Model) renderFilePanel(width, height int) string {
 		return strings.Join(lines, "\n")
 	}
 
-	visibleRows := height - 2
+	visibleRows := height - len(lines) - 1
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
 	start := 0
 	if m.fileCursor >= visibleRows {
 		start = m.fileCursor - visibleRows + 1
 	}
 
 	for i := start; i < len(docs) && len(lines) < height-1; i++ {
-		cursor := "  "
-		if i == m.fileCursor && focused {
-			cursor = "> "
-		} else if i == m.fileCursor {
-			cursor = "- "
+		doc := docs[i]
+		selected := i == m.fileCursor
+
+		// Cursor prefix
+		var cursorStr string
+		if selected && focused {
+			cursorStr = m.theme.FileCursor.Render(m.icons.CursorSel)
+		} else if selected {
+			cursorStr = m.icons.CursorInactive
+		} else {
+			cursorStr = "  "
 		}
-		gitMarker := m.gitMarkerFor(docs[i].Path)
-		name := filepath.Base(docs[i].Path)
-		// Reserve space: 2 prefix + name + space + marker
-		nameWidth := width - 2 - len(gitMarker) - 1
+
+		// Pin marker
+		pinMarker := ""
+		if m.pinnedPaths[doc.Path] {
+			pinMarker = m.theme.FilePinned.Render(m.icons.Pinned)
+		}
+
+		// Git marker
+		gitMarker := m.gitMarkerStyled(doc.Path)
+
+		name := filepath.Base(doc.Path)
+		// Estimate available name width (subtract cursor + pin + git + spaces).
+		markerLen := lipgloss.Width(gitMarker) + lipgloss.Width(pinMarker)
+		nameWidth := width - lipgloss.Width(cursorStr) - markerLen - 1
 		if nameWidth < 1 {
 			nameWidth = 1
 		}
-		line := cursor + truncate(name, nameWidth) + " " + gitMarker
+
+		var nameStr string
+		if selected && focused {
+			nameStr = m.theme.FileSelected.Render(truncate(name, nameWidth))
+		} else if m.pinnedPaths[doc.Path] {
+			nameStr = m.theme.FilePinned.Render(truncate(name, nameWidth))
+		} else {
+			nameStr = m.theme.FileNormal.Render(truncate(name, nameWidth))
+		}
+
+		line := cursorStr + nameStr
+		if pinMarker != "" {
+			line += " " + pinMarker
+		}
+		if gitMarker != "" {
+			line += " " + gitMarker
+		}
 		lines = append(lines, strings.TrimRight(line, " "))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderPreviewPanel renders the preview/detail panel with frontmatter info.
+// renderPreviewPanel renders the preview/detail panel.
 func (m Model) renderPreviewPanel(width, height int) string {
 	focused := m.activePanel == PanelPreview
-	title := panelHeader("Preview", focused, width)
+	title := styledPanelHeader("Preview", focused, width, m.theme, m.icons)
 
 	var lines []string
 	lines = append(lines, title)
 
 	docs := m.visibleDocs()
+
+	// Calculate space for viewport vs TODO panel.
+	todoHeight := len(m.todos) + 3 // header + items + empty-msg
+	if len(m.todos) == 0 {
+		todoHeight = 3
+	}
+	if todoHeight > height/3 {
+		todoHeight = height / 3
+	}
+	viewportAvail := height - 1 - todoHeight // minus panel header
+	if viewportAvail < 2 {
+		viewportAvail = 2
+	}
+
 	if m.fileCursor < len(docs) {
 		r := docs[m.fileCursor]
 		fm := r.Frontmatter
-		lines = append(lines, "")
-		lines = append(lines, truncate("  "+fm.Title, width-1))
-		lines = append(lines, "")
-		lines = append(lines, truncate(fmt.Sprintf("  type: %s", fm.Type), width-1))
-		if len(fm.Tags) > 0 {
-			lines = append(lines, truncate(fmt.Sprintf("  tags: %s", strings.Join(fm.Tags, ", ")), width-1))
+
+		if m.preview.Width > 0 && m.preview.TotalLineCount() > 0 {
+			// Glamour-rendered viewport content.
+			vpLines := strings.Split(m.preview.View(), "\n")
+			for i, l := range vpLines {
+				if i >= viewportAvail {
+					break
+				}
+				lines = append(lines, l)
+			}
+		} else {
+			// Fallback: show styled frontmatter metadata.
+			lines = append(lines, "")
+			lines = append(lines, m.theme.PreviewTitle.Render(truncate("  "+fm.Title, width-1)))
+			lines = append(lines, "")
+			lines = append(lines, m.theme.PreviewKey.Render("  type: ")+m.theme.PreviewMeta.Render(fm.Type))
+			if len(fm.Tags) > 0 {
+				lines = append(lines, m.theme.PreviewKey.Render("  tags: ")+
+					m.theme.PreviewMeta.Render(truncate(strings.Join(fm.Tags, ", "), width-10)))
+			}
+			if !fm.Modified.IsZero() {
+				lines = append(lines, m.theme.PreviewKey.Render("  modified: ")+
+					m.theme.PreviewMeta.Render(fm.Modified.Format("2006-01-02")))
+			}
+			lines = append(lines, "")
+			lines = append(lines, m.theme.PreviewMeta.Render(truncate("  "+filepath.Base(r.Path), width-1)))
 		}
-		if !fm.Modified.IsZero() {
-			lines = append(lines, truncate(fmt.Sprintf("  modified: %s", fm.Modified.Format("2006-01-02")), width-1))
-		}
-		lines = append(lines, "")
-		lines = append(lines, truncate("  "+filepath.Base(r.Path), width-1))
 	}
 
 	// TODO mini-panel at bottom of right side.
-	todoStart := height - len(m.todos) - 3
+	todoStart := height - todoHeight
 	if todoStart < len(lines)+1 {
 		todoStart = len(lines) + 1
 	}
@@ -150,60 +228,81 @@ func (m Model) renderPreviewPanel(width, height int) string {
 	}
 
 	todoFocused := m.activePanel == PanelTodo
-	lines = append(lines, panelHeader("TODOs", todoFocused, width))
+	lines = append(lines, styledPanelHeader("TODOs", todoFocused, width, m.theme, m.icons))
 	for i, task := range m.todos {
 		cursor := "  "
 		if i == m.todoCursor && todoFocused {
-			cursor = "> "
+			cursor = m.theme.FileCursor.Render(m.icons.CursorSel)
 		}
 		if len(lines) < height-1 {
-			lines = append(lines, cursor+truncate(task.Raw, width-3))
+			lines = append(lines, cursor+m.theme.TodoOpen.Render(truncate(task.Raw, width-3)))
 		}
 	}
 	if len(m.todos) == 0 && len(lines) < height-1 {
-		lines = append(lines, "  (no open tasks)")
+		lines = append(lines, m.theme.PreviewMeta.Render("  (no open tasks)"))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderStatusBar renders the bottom status line with git info and doc count.
+// renderStatusBar renders the bottom status line with mode, git info, and hints.
 func (m Model) renderStatusBar() string {
-	left := fmt.Sprintf(" %s ", m.mode.String())
+	// Mode indicator (styled by current mode).
+	var modeStyle lipgloss.Style
+	switch m.mode {
+	case ModeCommand:
+		modeStyle = m.theme.StatusCommand
+	case ModeSearch:
+		modeStyle = m.theme.StatusSearch
+	case ModeTemplatePicker, ModeTemplateVars:
+		modeStyle = m.theme.StatusNewDoc
+	case ModeDeleteConfirm:
+		modeStyle = m.theme.StatusCommand // reuse yellow for danger
+	default:
+		modeStyle = m.theme.StatusNormal
+	}
+	modeStr := modeStyle.Render(m.mode.String())
 
-	// Append git branch and sync info if available.
+	left := modeStr + " "
+
+	// Git branch and sync info.
 	if m.gitStatus.Branch != "" {
-		left += fmt.Sprintf("│ %s ", m.gitStatus.Branch)
+		gitStr := m.gitStatus.Branch
 		if m.gitStatus.Ahead > 0 {
-			left += fmt.Sprintf("↑%d ", m.gitStatus.Ahead)
+			gitStr += fmt.Sprintf(" ↑%d", m.gitStatus.Ahead)
 		}
 		if m.gitStatus.Behind > 0 {
-			left += fmt.Sprintf("↓%d ", m.gitStatus.Behind)
+			gitStr += fmt.Sprintf(" ↓%d", m.gitStatus.Behind)
 		}
+		left += m.theme.StatusGit.Render("│ "+gitStr+" ")
 	}
 
-	// Doc count.
-	if !m.loading {
-		left += fmt.Sprintf("│ %d docs ", len(m.docs))
+	// Doc count / loading state.
+	if m.loading {
+		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+		left += m.theme.StatusInfo.Render("│ " + frame + " scanning… ")
 	} else {
-		left += "│ scanning… "
+		left += m.theme.StatusInfo.Render(fmt.Sprintf("│ %d docs ", len(m.docs)))
 	}
 
+	// Right side: mode input or status/hint.
 	var right string
 	switch m.mode {
 	case ModeCommand:
-		right = fmt.Sprintf(":%s", m.cmdInput.View())
+		right = m.theme.StatusMsg.Render(":") + m.cmdInput.View()
 	case ModeSearch:
-		right = fmt.Sprintf("/%s", m.searchInput.View())
+		right = m.theme.StatusMsg.Render("/") + m.searchInput.View()
 	default:
 		if m.statusMsg != "" {
-			right = m.statusMsg
+			right = m.theme.StatusMsg.Render(m.statusMsg)
 		} else {
-			right = "/search  :cmd  ?help  q:quit"
+			right = m.theme.StatusHint.Render("/search  :cmd  f:filter  ?help  q:quit")
 		}
 	}
 
-	gap := m.width - len(left) - len(right) - 1
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	gap := m.width - leftWidth - rightWidth - 1
 	if gap < 1 {
 		gap = 1
 	}
@@ -213,90 +312,136 @@ func (m Model) renderStatusBar() string {
 // viewTemplatePicker renders the template selection overlay.
 func (m Model) viewTemplatePicker() string {
 	var b strings.Builder
-	b.WriteString("\n  New Document — Select Template\n\n")
+	b.WriteString("\n")
+	b.WriteString(m.theme.DashboardHeader.Render("  New Document — Select Template"))
+	b.WriteString("\n\n")
 	for i, t := range m.templates {
-		cursor := "  "
 		if i == m.pickerCursor {
-			cursor = "> "
+			b.WriteString(m.theme.FileCursor.Render(fmt.Sprintf("  %s%-12s", m.icons.CursorSel, t.Name)))
+		} else {
+			b.WriteString(m.theme.FileNormal.Render(fmt.Sprintf("  %-14s", t.Name)))
 		}
-		b.WriteString(fmt.Sprintf("  %s%-12s\n", cursor, t.Name))
+		b.WriteString("\n")
 	}
 	if len(m.templates) == 0 {
-		b.WriteString("  (no templates found)\n")
+		b.WriteString(m.theme.PreviewMeta.Render("  (no templates found)"))
+		b.WriteString("\n")
 	}
-	b.WriteString("\n  j/k to navigate, Enter to select, Esc to cancel\n")
+	b.WriteString("\n")
+	b.WriteString(m.theme.StatusHint.Render("  j/k to navigate, Enter to select, Esc to cancel"))
+	b.WriteString("\n")
 	return b.String()
 }
 
 // viewTemplateVars renders the variable input form for a selected template.
 func (m Model) viewTemplateVars() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\n  New %s — Enter Details\n\n", m.pendingTmpl.Name))
+	b.WriteString("\n")
+	b.WriteString(m.theme.DashboardHeader.Render(fmt.Sprintf("  New %s — Enter Details", m.pendingTmpl.Name)))
+	b.WriteString("\n\n")
 	for i, name := range m.varNames {
 		if i < m.varCursor {
-			b.WriteString(fmt.Sprintf("  %-12s %s\n", name+":", m.varValues[i]))
+			b.WriteString(m.theme.PreviewKey.Render(fmt.Sprintf("  %-12s", name+":")))
+			b.WriteString(m.theme.FileNormal.Render(m.varValues[i]))
 		} else if i == m.varCursor {
-			b.WriteString(fmt.Sprintf("  %-12s %s\n", name+":", m.varInput.View()))
+			b.WriteString(m.theme.PreviewKey.Render(fmt.Sprintf("  %-12s", name+":")))
+			b.WriteString(m.varInput.View())
 		} else {
-			b.WriteString(fmt.Sprintf("  %-12s\n", name+":"))
+			b.WriteString(m.theme.PreviewMeta.Render(fmt.Sprintf("  %-12s", name+":")))
 		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n  Enter to confirm, Esc to go back\n")
+	b.WriteString("\n")
+	b.WriteString(m.theme.StatusHint.Render("  Enter to confirm, Esc to go back"))
+	b.WriteString("\n")
 	return b.String()
 }
 
 // viewHelp renders the help overlay.
 func (m Model) viewHelp() string {
 	var b strings.Builder
-	b.WriteString("\n  Keybindings\n")
-	b.WriteString("  ───────────\n\n")
-	b.WriteString("  Navigation\n")
-	b.WriteString("    j / k       move down / up\n")
-	b.WriteString("    h / l       prev / next panel\n")
-	b.WriteString("    gg / G      top / bottom\n")
-	b.WriteString("    Tab         cycle panel focus\n\n")
-	b.WriteString("  Modes\n")
-	b.WriteString("    /           search\n")
-	b.WriteString("    :           command\n")
-	b.WriteString("    Esc         cancel / return to normal\n\n")
-	b.WriteString("  Views\n")
-	b.WriteString("    1           all documents\n")
-	b.WriteString("    2           journal\n")
-	b.WriteString("    3           knowledge base\n")
-	b.WriteString("    4           todos\n")
-	b.WriteString("    5           recent\n\n")
-	b.WriteString("  Actions\n")
-	b.WriteString("    Enter       open in $EDITOR (Phase 4)\n")
-	b.WriteString("    g           open lazygit (Phase 4)\n")
-	b.WriteString("    n           new document\n")
-	b.WriteString("    s           scratch pad (Phase 4)\n")
-	b.WriteString("    e           export\n")
-	b.WriteString("    R           rescan\n")
-	b.WriteString("    q           quit\n\n")
-	b.WriteString("  Commands (:)\n")
-	b.WriteString("    :todo sweep     run TODO sweep\n")
-	b.WriteString("    :todo archive   archive old tasks\n")
-	b.WriteString("    :q / :quit      quit\n\n")
-	b.WriteString("  Press ? to close help\n")
+	h := m.theme.DashboardHeader
+	k := m.theme.PreviewKey
+	n := m.theme.FileNormal
+
+	b.WriteString("\n")
+	b.WriteString(h.Render("  Keybindings"))
+	b.WriteString("\n")
+	b.WriteString(m.theme.Divider.Render("  ───────────"))
+	b.WriteString("\n\n")
+
+	b.WriteString(h.Render("  Navigation"))
+	b.WriteString("\n")
+	b.WriteString(k.Render("    j / k       ") + n.Render("move down / up") + "\n")
+	b.WriteString(k.Render("    h / l       ") + n.Render("prev / next panel") + "\n")
+	b.WriteString(k.Render("    gg / G      ") + n.Render("top / bottom") + "\n")
+	b.WriteString(k.Render("    Tab         ") + n.Render("cycle panel focus") + "\n\n")
+
+	b.WriteString(h.Render("  Modes"))
+	b.WriteString("\n")
+	b.WriteString(k.Render("    /           ") + n.Render("search") + "\n")
+	b.WriteString(k.Render("    :           ") + n.Render("command") + "\n")
+	b.WriteString(k.Render("    Esc         ") + n.Render("cancel / return to normal") + "\n\n")
+
+	b.WriteString(h.Render("  Views"))
+	b.WriteString("\n")
+	b.WriteString(k.Render("    1           ") + n.Render("dashboard") + "\n")
+	b.WriteString(k.Render("    2           ") + n.Render("journal") + "\n")
+	b.WriteString(k.Render("    3           ") + n.Render("knowledge base") + "\n")
+	b.WriteString(k.Render("    4           ") + n.Render("todos") + "\n")
+	b.WriteString(k.Render("    5           ") + n.Render("recent") + "\n")
+	b.WriteString(k.Render("    6           ") + n.Render("tag browser") + "\n\n")
+
+	b.WriteString(h.Render("  Actions"))
+	b.WriteString("\n")
+	b.WriteString(k.Render("    Enter       ") + n.Render("open in $EDITOR") + "\n")
+	b.WriteString(k.Render("    ctrl+g      ") + n.Render("open lazygit") + "\n")
+	b.WriteString(k.Render("    n           ") + n.Render("new document") + "\n")
+	b.WriteString(k.Render("    s           ") + n.Render("scratch pad") + "\n")
+	b.WriteString(k.Render("    e           ") + n.Render("export") + "\n")
+	b.WriteString(k.Render("    p           ") + n.Render("pin / unpin") + "\n")
+	b.WriteString(k.Render("    d           ") + n.Render("delete (with confirmation)") + "\n")
+	b.WriteString(k.Render("    f           ") + n.Render("cycle smart filter") + "\n")
+	b.WriteString(k.Render("    R           ") + n.Render("rescan") + "\n")
+	b.WriteString(k.Render("    q           ") + n.Render("quit") + "\n\n")
+
+	b.WriteString(h.Render("  Commands (:)"))
+	b.WriteString("\n")
+	b.WriteString(k.Render("    :todo sweep     ") + n.Render("run TODO sweep") + "\n")
+	b.WriteString(k.Render("    :todo archive   ") + n.Render("archive old tasks") + "\n")
+	b.WriteString(k.Render("    :q / :quit      ") + n.Render("quit") + "\n\n")
+
+	b.WriteString(m.theme.StatusHint.Render("  Press ? to close help"))
+	b.WriteString("\n")
 	return b.String()
 }
 
-// gitMarkerFor returns a git status marker string for the given file path.
-func (m Model) gitMarkerFor(path string) string {
+// gitMarkerStyled returns a styled git status marker string for the given file path.
+func (m Model) gitMarkerStyled(path string) string {
 	fs, ok := m.gitFileMap[path]
 	if !ok {
 		return ""
 	}
 	switch {
 	case fs.IsUntracked():
-		return "[?]"
+		return m.theme.GitUntracked.Render(m.icons.GitUntracked)
 	case fs.IsStaged():
-		return "[A]"
+		return m.theme.GitStaged.Render(m.icons.GitStaged)
 	case fs.IsModified():
-		return "[M]"
+		return m.theme.GitModified.Render(m.icons.GitModified)
 	default:
 		return ""
 	}
+}
+
+// gitMarkerFor returns a plain git status marker string for the given file path.
+// Kept for backward compatibility with tests.
+func (m Model) gitMarkerFor(path string) string {
+	fs, ok := m.gitFileMap[path]
+	if !ok {
+		return ""
+	}
+	return gitMarkerForStatus(fs)
 }
 
 // gitMarkerForStatus returns a marker directly from a FileStatus (for testing).
@@ -315,7 +460,28 @@ func gitMarkerForStatus(fs git.FileStatus) string {
 
 // --- Layout helpers ---
 
-// panelHeader renders a panel title line with focus indicator.
+// styledPanelHeader renders a panel title with lipgloss styling and focus indicator.
+func styledPanelHeader(title string, focused bool, width int, th Theme, icons Icons) string {
+	_ = icons // reserved for future icon use in headers
+	var prefix string
+	var style lipgloss.Style
+	if focused {
+		prefix = "▶ "
+		style = th.HeaderFocused
+	} else {
+		prefix = "─ "
+		style = th.HeaderUnfocused
+	}
+	label := prefix + title + " "
+	rest := width - lipgloss.Width(label)
+	if rest < 0 {
+		rest = 0
+	}
+	return style.Render(label + strings.Repeat("─", rest))
+}
+
+// panelHeader renders a plain panel title line with focus indicator.
+// Kept for backward compatibility with tests.
 func panelHeader(title string, focused bool, width int) string {
 	prefix := "─ "
 	if focused {
@@ -329,26 +495,28 @@ func panelHeader(title string, focused bool, width int) string {
 	return label + strings.Repeat("─", rest)
 }
 
-// padRight pads s with spaces to length n, or truncates if longer.
+// padRight pads s with spaces to visual width n, using ANSI-aware measurement.
 func padRight(s string, n int) string {
-	if len(s) >= n {
-		return s[:n]
+	w := lipgloss.Width(s)
+	if w >= n {
+		return s
 	}
-	return s + strings.Repeat(" ", n-len(s))
+	return s + strings.Repeat(" ", n-w)
 }
 
-// truncate shortens s to maxLen, appending "…" if truncated.
+// truncate shortens s to maxLen runes, appending "…" if truncated.
 func truncate(s string, maxLen int) string {
 	if maxLen <= 0 {
 		return ""
 	}
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 1 {
 		return "…"
 	}
-	return s[:maxLen-1] + "…"
+	return string(runes[:maxLen-1]) + "…"
 }
 
 // splitLines splits a multiline string into a slice, padding to count lines.

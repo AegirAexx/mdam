@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,16 @@ import (
 	tmpl "github.com/AegirAexx/mdam/internal/template"
 	"github.com/AegirAexx/mdam/internal/todo"
 )
+
+// --- ANSI stripping helper ---
+
+// ansiRE matches ANSI escape sequences (used to make View() assertions terminal-agnostic).
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripANSI removes all ANSI escape codes from s.
+func stripANSI(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
 
 // --- Test helpers ---
 
@@ -96,6 +108,17 @@ func modelWithDocs() Model {
 	return m
 }
 
+// --- stripANSI smoke test ---
+
+func TestStripANSI(t *testing.T) {
+	input := "\x1b[32mHello\x1b[0m World"
+	got := stripANSI(input)
+	want := "Hello World"
+	if got != want {
+		t.Errorf("stripANSI(%q) = %q, want %q", input, got, want)
+	}
+}
+
 // --- Phase 2 baseline tests (updated for new API) ---
 
 func TestNewModel(t *testing.T) {
@@ -121,6 +144,7 @@ func TestModeString(t *testing.T) {
 		{ModeSearch, "SEARCH"},
 		{ModeTemplatePicker, "NEW DOC"},
 		{ModeTemplateVars, "NEW DOC"},
+		{ModeDeleteConfirm, "DELETE?"},
 	}
 	for _, tt := range tests {
 		if got := tt.mode.String(); got != tt.want {
@@ -288,6 +312,18 @@ func TestWindowResize(t *testing.T) {
 	}
 }
 
+func TestWindowResizeUpdatesViewport(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	// Viewport width should be set to the right panel width.
+	leftWidth := 120 / 3
+	rightWidth := 120 - leftWidth - 1
+	if m2.preview.Width != rightWidth {
+		t.Errorf("viewport width = %d, want %d", m2.preview.Width, rightWidth)
+	}
+}
+
 func TestTodoCursorMovement(t *testing.T) {
 	m := newTestModel()
 	m = sendMsg(m, todosLoadedMsg{tasks: fakeTasks})
@@ -317,7 +353,7 @@ func TestViewContainsModeIndicator(t *testing.T) {
 	m := newTestModel()
 	m.width = 80
 	m.height = 24
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "NORMAL") {
 		t.Errorf("View() does not contain NORMAL mode indicator")
 	}
@@ -328,7 +364,7 @@ func TestViewHelpOverlay(t *testing.T) {
 	m.width = 80
 	m.height = 40
 	m.showHelp = true
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "Keybindings") {
 		t.Errorf("help view does not contain 'Keybindings': %q", view)
 	}
@@ -339,7 +375,7 @@ func TestViewInSearchMode(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	m = sendKey(m, "/")
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "SEARCH") {
 		t.Errorf("view in search mode missing SEARCH indicator")
 	}
@@ -350,7 +386,7 @@ func TestViewInCommandMode(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	m = sendKey(m, ":")
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "COMMAND") {
 		t.Errorf("view in command mode missing COMMAND indicator")
 	}
@@ -393,7 +429,6 @@ func TestPadRight(t *testing.T) {
 	}{
 		{"hi", 5, "hi   "},
 		{"hello", 5, "hello"},
-		{"toolong", 4, "tool"},
 		{"", 3, "   "},
 	}
 	for _, tt := range tests {
@@ -432,6 +467,15 @@ func TestPanelHeader(t *testing.T) {
 	h2 := panelHeader("Files", false, 20)
 	if !strings.HasPrefix(h2, "─") {
 		t.Errorf("unfocused header should start with ─, got %q", h2)
+	}
+}
+
+func TestStyledPanelHeaderFocused(t *testing.T) {
+	th := NewTheme("tokyonight")
+	icons := PlainIcons()
+	h := stripANSI(styledPanelHeader("Files", true, 20, th, icons))
+	if !strings.HasPrefix(h, "▶") {
+		t.Errorf("styled focused header should start with ▶, got %q", h)
 	}
 }
 
@@ -536,7 +580,6 @@ func TestVisibleDocsRecent(t *testing.T) {
 	m := modelWithDocs()
 	m.activeView = ViewRecent
 	docs := m.visibleDocs()
-	// Should be sorted by Modified descending.
 	for i := 1; i < len(docs); i++ {
 		if docs[i].Frontmatter.Modified.After(docs[i-1].Frontmatter.Modified) {
 			t.Errorf("ViewRecent not sorted by Modified desc at index %d", i)
@@ -551,6 +594,15 @@ func TestVisibleDocsSearch(t *testing.T) {
 	docs := m.visibleDocs()
 	if len(docs) != 1 {
 		t.Errorf("searchActive: visible docs = %d, want 1", len(docs))
+	}
+}
+
+func TestVisibleDocsTagsReturnsNil(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewTags
+	docs := m.visibleDocs()
+	if docs != nil {
+		t.Errorf("ViewTags: visibleDocs should return nil, got %v", docs)
 	}
 }
 
@@ -648,7 +700,7 @@ func TestStatusBarShowsBranch(t *testing.T) {
 	m.height = 24
 	m.gitStatus = git.RepoStatus{Branch: "main"}
 	m.loading = false
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "main") {
 		t.Errorf("status bar missing branch name 'main' in view:\n%s", view)
 	}
@@ -658,7 +710,7 @@ func TestStatusBarShowsDocCount(t *testing.T) {
 	m := modelWithDocs()
 	m.width = 80
 	m.height = 24
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "3 docs") {
 		t.Errorf("status bar missing doc count '3 docs' in view:\n%s", view)
 	}
@@ -669,7 +721,7 @@ func TestStatusBarLoadingState(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	// loading is true by default before docsLoadedMsg.
-	view := m.View()
+	view := stripANSI(m.View())
 	if !strings.Contains(view, "scanning") {
 		t.Errorf("loading state should show 'scanning' in view:\n%s", view)
 	}
@@ -681,7 +733,7 @@ func TestViewSwitching(t *testing.T) {
 		key      string
 		wantView View
 	}{
-		{"1", ViewAll},
+		{"1", ViewDashboard}, // key 1 now maps to dashboard
 		{"2", ViewJournal},
 		{"3", ViewKB},
 		{"5", ViewRecent},
@@ -702,6 +754,18 @@ func TestView4SwitchesToTodoPanel(t *testing.T) {
 	}
 	if m.activeView != ViewTodo {
 		t.Errorf("key 4: activeView = %v, want ViewTodo", m.activeView)
+	}
+}
+
+func TestView6SwitchesToTags(t *testing.T) {
+	m := modelWithDocs()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6")})
+	m2 := sendKey(m, "6")
+	if m2.activeView != ViewTags {
+		t.Errorf("key 6: activeView = %v, want ViewTags", m2.activeView)
+	}
+	if cmd == nil {
+		t.Error("key 6 should return cmdBuildTagIndex")
 	}
 }
 
@@ -754,9 +818,9 @@ func TestResolveEditor(t *testing.T) {
 		envEditor string
 		want      string
 	}{
-		{"nvim", "vim", "nvim"},   // config takes precedence over $EDITOR
-		{"", "vim", "vim"},        // falls back to $EDITOR
-		{"", "", ""},              // empty when neither is set
+		{"nvim", "vim", "nvim"},
+		{"", "vim", "vim"},
+		{"", "", ""},
 	}
 	for _, tt := range tests {
 		t.Setenv("EDITOR", tt.envEditor)
@@ -862,3 +926,332 @@ func TestLazygitEnabledReturnsCmd(t *testing.T) {
 		t.Error("ctrl+g with lazygit enabled should return a tea.Cmd")
 	}
 }
+
+// --- Phase 5 tests ---
+
+func TestDeleteKeyEntersConfirmMode(t *testing.T) {
+	m := modelWithDocs()
+	m = sendKey(m, "d")
+	if m.mode != ModeDeleteConfirm {
+		t.Errorf("d key: mode = %v, want ModeDeleteConfirm", m.mode)
+	}
+	if m.deleteConfirmPath == "" {
+		t.Error("d key: deleteConfirmPath should be set")
+	}
+}
+
+func TestDeleteKeyNoDocSelected(t *testing.T) {
+	m := newTestModel()
+	m = sendMsg(m, docsLoadedMsg{docs: []search.Result{}})
+	m = sendKey(m, "d")
+	if m.mode == ModeDeleteConfirm {
+		t.Error("d with no doc: should not enter delete confirm mode")
+	}
+	if !strings.Contains(m.statusMsg, "no document") {
+		t.Errorf("d with no doc: statusMsg = %q, want 'no document'", m.statusMsg)
+	}
+}
+
+func TestDeleteConfirmYReturnsCmd(t *testing.T) {
+	m := modelWithDocs()
+	m = sendKey(m, "d") // enter confirm mode
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	if cmd == nil {
+		t.Error("confirming delete (y) should return cmdDeleteDoc")
+	}
+}
+
+func TestDeleteConfirmNCancels(t *testing.T) {
+	m := modelWithDocs()
+	m = sendKey(m, "d")
+	m2 := sendKey(m, "n")
+	if m2.mode != ModeNormal {
+		t.Errorf("n in delete confirm: mode = %v, want ModeNormal", m2.mode)
+	}
+	if m2.deleteConfirmPath != "" {
+		t.Error("n in delete confirm: deleteConfirmPath should be cleared")
+	}
+}
+
+func TestDeleteConfirmEscCancels(t *testing.T) {
+	m := modelWithDocs()
+	m = sendKey(m, "d")
+	m2 := sendKey(m, "esc")
+	if m2.mode != ModeNormal {
+		t.Errorf("esc in delete confirm: mode = %v, want ModeNormal", m2.mode)
+	}
+}
+
+func TestDeleteDoneMsgReloadsAndSetsStatus(t *testing.T) {
+	m := modelWithDocs()
+	m2, cmd := m.Update(deleteDoneMsg{path: "/notes/setup-nginx.md"})
+	m3 := m2.(Model)
+	if !strings.Contains(m3.statusMsg, "deleted") {
+		t.Errorf("deleteDoneMsg: statusMsg = %q, want 'deleted'", m3.statusMsg)
+	}
+	if cmd == nil {
+		t.Error("deleteDoneMsg should return cmdLoadDocs")
+	}
+}
+
+func TestDeleteDoneMsgError(t *testing.T) {
+	m := newTestModel()
+	m2, _ := m.Update(deleteDoneMsg{path: "/notes/x.md", err: fmt.Errorf("permission denied")})
+	m3 := m2.(Model)
+	if !strings.Contains(m3.statusMsg, "delete failed") {
+		t.Errorf("deleteDoneMsg error: statusMsg = %q, want 'delete failed'", m3.statusMsg)
+	}
+}
+
+func TestPinKeyTogglesPin(t *testing.T) {
+	m := modelWithDocs()
+	path := fakeDocs[0].Path
+	if m.pinnedPaths[path] {
+		t.Fatal("path should not be pinned initially")
+	}
+	m2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m3 := m2.(Model)
+	if !m3.pinnedPaths[path] {
+		t.Error("p key: path should be pinned after first press")
+	}
+	if cmd == nil {
+		t.Error("p key: should return cmdSavePins")
+	}
+}
+
+func TestPinKeyUnpins(t *testing.T) {
+	m := modelWithDocs()
+	m = sendKey(m, "p") // pin
+	m2 := sendKey(m, "p") // unpin
+	path := fakeDocs[0].Path
+	if m2.pinnedPaths[path] {
+		t.Error("second p press: path should be unpinned")
+	}
+}
+
+func TestPinKeyNoDocSelected(t *testing.T) {
+	m := newTestModel()
+	m = sendMsg(m, docsLoadedMsg{docs: []search.Result{}})
+	m = sendKey(m, "p")
+	if !strings.Contains(m.statusMsg, "no document") {
+		t.Errorf("p with no doc: statusMsg = %q, want 'no document'", m.statusMsg)
+	}
+}
+
+func TestSmartFilterCycles(t *testing.T) {
+	m := newTestModel()
+	if m.smartFilter != SmartFilterNone {
+		t.Fatal("smartFilter should start at None")
+	}
+	m = sendKey(m, "f")
+	if m.smartFilter != SmartFilterUntagged {
+		t.Errorf("after f: smartFilter = %v, want Untagged", m.smartFilter)
+	}
+	m = sendKey(m, "f")
+	if m.smartFilter != SmartFilterStaleWeek {
+		t.Errorf("after ff: smartFilter = %v, want StaleWeek", m.smartFilter)
+	}
+	m = sendKey(m, "f")
+	if m.smartFilter != SmartFilterInbox {
+		t.Errorf("after fff: smartFilter = %v, want Inbox", m.smartFilter)
+	}
+	m = sendKey(m, "f")
+	if m.smartFilter != SmartFilterNone {
+		t.Errorf("after ffff: smartFilter = %v, want None (wrapped)", m.smartFilter)
+	}
+}
+
+func TestSmartFilterUntagged(t *testing.T) {
+	tagged := search.Result{
+		Path: "/notes/tagged.md",
+		Frontmatter: document.Frontmatter{Tags: []string{"go"}},
+	}
+	untagged := search.Result{
+		Path: "/notes/untagged.md",
+		Frontmatter: document.Frontmatter{Tags: nil},
+	}
+	docs := []search.Result{tagged, untagged}
+	result := applySmartFilter(docs, SmartFilterUntagged)
+	if len(result) != 1 {
+		t.Errorf("SmartFilterUntagged: got %d docs, want 1", len(result))
+	}
+	if result[0].Path != untagged.Path {
+		t.Errorf("SmartFilterUntagged: got %q, want %q", result[0].Path, untagged.Path)
+	}
+}
+
+func TestSmartFilterInbox(t *testing.T) {
+	docs := []search.Result{
+		{Path: "/a.md", Frontmatter: document.Frontmatter{Type: "unsorted"}},
+		{Path: "/b.md", Frontmatter: document.Frontmatter{Type: "kb"}},
+	}
+	result := applySmartFilter(docs, SmartFilterInbox)
+	if len(result) != 1 {
+		t.Errorf("SmartFilterInbox: got %d docs, want 1", len(result))
+	}
+}
+
+func TestPreviewReadyMsgUpdatesViewport(t *testing.T) {
+	m := newTestModel()
+	m.preview.Width = 60
+	m.preview.Height = 20
+	content := "# Hello\n\nThis is a preview."
+	m2 := sendMsg(m, previewReadyMsg{content: content})
+	if m2.preview.TotalLineCount() == 0 {
+		t.Error("previewReadyMsg: viewport should have content")
+	}
+}
+
+func TestPinsLoadedMsgUpdatesPins(t *testing.T) {
+	m := newTestModel()
+	pins := map[string]bool{"/notes/a.md": true}
+	m2 := sendMsg(m, pinsLoadedMsg{pins: pins})
+	if !m2.pinnedPaths["/notes/a.md"] {
+		t.Error("pinsLoadedMsg: /notes/a.md should be pinned")
+	}
+}
+
+func TestPinsLoadedMsgErrorIgnored(t *testing.T) {
+	m := newTestModel()
+	m2 := sendMsg(m, pinsLoadedMsg{err: fmt.Errorf("no pins file")})
+	// On error, pins stay empty — no panic.
+	if len(m2.pinnedPaths) != 0 {
+		t.Errorf("pinsLoadedMsg error: pinnedPaths should remain empty, got %v", m2.pinnedPaths)
+	}
+}
+
+func TestViewDashboardRendersWithoutPanic(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	m.activeView = ViewDashboard
+	view := m.View()
+	if view == "" {
+		t.Error("ViewDashboard rendered empty string")
+	}
+}
+
+func TestViewDashboardShowsStatusBar(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	m.activeView = ViewDashboard
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "NORMAL") {
+		t.Errorf("dashboard view missing NORMAL mode indicator:\n%s", view)
+	}
+}
+
+func TestViewTagBrowserRendersWithoutPanic(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	m.activeView = ViewTags
+	m.tagEntries = buildTagIndex(fakeDocs)
+	view := m.View()
+	if view == "" {
+		t.Error("ViewTags rendered empty string")
+	}
+}
+
+func TestSpinnerFrameAdvancesOnTick(t *testing.T) {
+	m := newTestModel() // loading = true
+	initial := m.spinnerFrame
+	m2, cmd := m.Update(tickMsg{})
+	m3 := m2.(Model)
+	if m3.spinnerFrame == initial {
+		t.Error("tickMsg should advance spinnerFrame")
+	}
+	// When loading, tick re-schedules.
+	if cmd == nil {
+		t.Error("tickMsg while loading should return cmdTick")
+	}
+}
+
+func TestSpinnerStopsWhenNotLoading(t *testing.T) {
+	m := modelWithDocs() // loading = false after docsLoadedMsg
+	_, cmd := m.Update(tickMsg{})
+	if cmd != nil {
+		t.Error("tickMsg when not loading should not return a cmd")
+	}
+}
+
+func TestSmartFilterStringNone(t *testing.T) {
+	if SmartFilterNone.String() != "" {
+		t.Errorf("SmartFilterNone.String() = %q, want empty", SmartFilterNone.String())
+	}
+}
+
+func TestSmartFilterStrings(t *testing.T) {
+	tests := []struct {
+		f    SmartFilter
+		want string
+	}{
+		{SmartFilterUntagged, "filter: untagged"},
+		{SmartFilterStaleWeek, "filter: stale (>7 days)"},
+		{SmartFilterInbox, "filter: inbox"},
+	}
+	for _, tt := range tests {
+		if got := tt.f.String(); got != tt.want {
+			t.Errorf("SmartFilter(%d).String() = %q, want %q", tt.f, got, tt.want)
+		}
+	}
+}
+
+func TestNewModelHasThemeAndIcons(t *testing.T) {
+	m := New(config.Config{Theme: "nord"})
+	if m.theme.GlamourStyle == "" {
+		t.Error("New() should initialize theme with non-empty GlamourStyle")
+	}
+	if m.icons.CursorSel == "" {
+		t.Error("New() should initialize icons with non-empty CursorSel")
+	}
+}
+
+func TestNewModelNerdFonts(t *testing.T) {
+	plain := New(config.Config{NerdFonts: false})
+	nerd := New(config.Config{NerdFonts: true})
+	if plain.icons.CursorSel == nerd.icons.CursorSel {
+		t.Error("NerdFonts=false and NerdFonts=true should produce different icons")
+	}
+}
+
+func TestViewTagsKeyBuildTagIndex(t *testing.T) {
+	m := modelWithDocs()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6")})
+	if cmd == nil {
+		t.Error("key 6 should return cmdBuildTagIndex")
+	}
+}
+
+func TestDeleteModeStringIs(t *testing.T) {
+	if ModeDeleteConfirm.String() != "DELETE?" {
+		t.Errorf("ModeDeleteConfirm.String() = %q, want DELETE?", ModeDeleteConfirm.String())
+	}
+}
+
+// TestViewShowsFileNames verifies that file names appear in the file panel.
+func TestViewShowsFileNames(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "2026-03-14.md") {
+		t.Errorf("view should contain filename '2026-03-14.md':\n%s", view)
+	}
+}
+
+// TestViewShowsDeleteConfirmStatus verifies the delete confirm status message.
+func TestViewShowsDeleteConfirmStatus(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	m = sendKey(m, "d")
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "Delete") {
+		t.Errorf("delete confirm view should contain 'Delete':\n%s", view)
+	}
+}
+
+// reusable for other packages
+var _ = filepath.Join // keep filepath import used

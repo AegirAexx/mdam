@@ -1,16 +1,17 @@
 # MadaM — Keybinding Reference
 
-> **Status:** Current through Phase 4. Keybindings for Phase 5 features (tag browser, delete confirmation, ambient findability views) are not yet defined. The full keybinding pass described in the spec will happen at the Phase 5 start after real usage with the Phase 4 tool informs the design.
+> **Status:** Current through Phase 5. Full keybinding review completed at Phase 5 start. Additional Phase 5 items (TODO-specific bindings, `g` vs `ctrl+g` revisit) deferred to real usage data.
 
 ## Modes
 
-MadaM's TUI operates in three modes. There is no insert or visual mode — all text editing is handled by `$EDITOR`.
+MadaM's TUI operates in four modes. There is no insert or visual mode — all text editing is handled by `$EDITOR`.
 
-| Mode    | Purpose                                | Activation | Exit        |
-|---------|----------------------------------------|------------|-------------|
-| Normal  | Navigate, browse, trigger actions      | Default    | —           |
-| Command | Execute colon-prefixed commands        | `:`        | `Enter`/`Esc` |
-| Search  | Fuzzy find across the document tree    | `/`        | `Enter`/`Esc` |
+| Mode          | Purpose                                   | Activation     | Exit              |
+|---------------|-------------------------------------------|----------------|-------------------|
+| Normal        | Navigate, browse, trigger actions         | Default        | —                 |
+| Command       | Execute colon-prefixed commands           | `:`            | `Enter` / `Esc`   |
+| Search        | Fuzzy find across the document tree       | `/`            | `Enter` / `Esc`   |
+| Delete?       | Confirm or cancel a document deletion     | `d` on a doc   | `y` (confirm) / `n` / `Esc` |
 
 ---
 
@@ -18,56 +19,75 @@ MadaM's TUI operates in three modes. There is no insert or visual mode — all t
 
 ### Navigation
 
-| Key        | Action                              |
-|------------|-------------------------------------|
-| `j`        | Move down                           |
-| `k`        | Move up                             |
-| `h`        | Collapse / navigate left panel      |
-| `l`        | Expand / navigate right panel       |
-| `gg`       | Jump to top of list                 |
-| `G`        | Jump to bottom of list              |
-| `Tab`      | Cycle panel focus                   |
-| `Shift+Tab`| Cycle panel focus (reverse)         |
+| Key          | Action                              |
+|--------------|-------------------------------------|
+| `j`          | Move down                           |
+| `k`          | Move up                             |
+| `h`          | Navigate left panel                 |
+| `l`          | Navigate right panel                |
+| `gg`         | Jump to top of list                 |
+| `G`          | Jump to bottom of list              |
+| `Tab`        | Cycle panel focus                   |
+| `Shift+Tab`  | Cycle panel focus (reverse)         |
+
+### Views
+
+| Key  | Action                                        |
+|------|-----------------------------------------------|
+| `1`  | Dashboard (today's context)                   |
+| `2`  | Journal view                                  |
+| `3`  | Knowledge base view                           |
+| `4`  | TODO view (focuses TODO panel)                |
+| `5`  | Recent documents (top 20 by modified date)    |
+| `6`  | Tag browser                                   |
+
+> **Note:** ViewAll (all documents) is the startup default and is accessible whenever no number view is active. Pressing `/` to search and then `Esc` returns to ViewAll.
 
 ### Document Actions
 
-| Key     | Action                                        |
-|---------|-----------------------------------------------|
-| `Enter` | Open selected document in `$EDITOR`           |
-| `s`     | Open scratch pad in `$EDITOR`                 |
-| `n`     | New document (template picker)                |
-| `d`     | Delete selected document (with confirmation)  |
-| `m`     | Move selected document to another directory   |
-| `e`     | Export selected document (strip frontmatter)  |
-| `y`     | Copy document path to clipboard               |
+| Key     | Action                                             |
+|---------|----------------------------------------------------|
+| `Enter` | Open selected document in `$EDITOR`               |
+| `s`     | Open scratch pad in `$EDITOR`                      |
+| `n`     | New document (template picker)                     |
+| `d`     | Delete selected document (prompts for confirmation)|
+| `e`     | Export selected document (strip frontmatter)       |
+| `p`     | Pin / unpin selected document                      |
 
-### Views & Navigation
+### Filtering & Search
 
-| Key     | Action                                        |
-|---------|-----------------------------------------------|
-| `/`     | Enter search mode                             |
-| `:`     | Enter command mode                            |
-| `?`     | Toggle keybinding help overlay                |
-| `1`     | Switch to today's context / dashboard         |
-| `2`     | Switch to journal view                        |
-| `3`     | Switch to knowledge base view                 |
-| `4`     | Switch to TODO view                           |
-| `5`     | Switch to recent documents view               |
+| Key  | Action                                                   |
+|------|----------------------------------------------------------|
+| `/`  | Enter search mode (fuzzy search)                         |
+| `f`  | Cycle smart filter: None → Untagged → Stale → Inbox → … |
 
 ### Git
 
-| Key      | Action                                       |
-|----------|----------------------------------------------|
-| `ctrl+g` | Open lazygit in the managed tree             |
+| Key      | Action                               |
+|----------|--------------------------------------|
+| `ctrl+g` | Open lazygit in the managed tree     |
 
-> **Note:** The spec lists `g` for lazygit, but `g` is also the first key of the `gg` jump-to-top chord. `ctrl+g` avoids the conflict. This will be revisited during the Phase 5 keybinding pass.
+> **Note:** `ctrl+g` is used instead of `g` to avoid conflicting with the `gg` jump-to-top chord. This will be reconsidered after Phase 5 real usage data is available.
 
 ### Application
 
-| Key     | Action                                        |
-|---------|-----------------------------------------------|
-| `q`     | Quit MadaM                                    |
-| `R`     | Force re-scan directory tree                  |
+| Key  | Action                     |
+|------|----------------------------|
+| `?`  | Toggle keybinding help overlay |
+| `q`  | Quit MadaM                 |
+| `R`  | Force re-scan directory tree |
+
+---
+
+## Delete Confirmation Mode
+
+Entered when `d` is pressed on a selected document.
+
+| Key        | Action                    |
+|------------|---------------------------|
+| `y`        | Confirm delete            |
+| `n`        | Cancel (return to Normal) |
+| `Esc`      | Cancel (return to Normal) |
 
 ---
 
@@ -78,15 +98,8 @@ Entered via `:` in normal mode. Commands are executed on `Enter`, cancelled with
 | Command                          | Action                                     |
 |----------------------------------|--------------------------------------------|
 | `:q`                             | Quit                                       |
-| `:sync`                          | Git add, commit, pull --rebase, push       |
-| `:import <path>`                 | Import file or directory                   |
-| `:import <path> --auto-fix`      | Import with auto-fix                       |
-| `:export`                        | Export selected document                   |
-| `:export --clipboard`            | Export to clipboard                        |
 | `:todo sweep`                    | Run TODO sweep manually                    |
 | `:todo archive`                  | Archive old completed tasks                |
-| `:template list`                 | List available templates                   |
-| `:config`                        | Open config.yml in `$EDITOR`               |
 
 ---
 
@@ -97,9 +110,36 @@ Entered via `/` in normal mode. Type to fuzzy-search, results update live.
 | Key        | Action                              |
 |------------|-------------------------------------|
 | `Enter`    | Open selected result in `$EDITOR`   |
-| `Esc`      | Cancel search, return to normal     |
-| `j` / `k`  | Navigate search results (TBD: may use arrow keys instead) |
-| `Tab`      | Cycle search scope (all / tags / filenames / content) |
+| `Esc`      | Cancel search, return to Normal     |
+| `j` / `k`  | Navigate search results             |
+
+---
+
+## Tag Browser (key `6`)
+
+The tag browser replaces the normal panel layout. The left panel lists all tags (sorted by document count). The right panel shows documents carrying the selected tag.
+
+| Key     | Action                                                |
+|---------|-------------------------------------------------------|
+| `j`/`k` | Navigate tags                                         |
+| `Enter` | Search for documents with the selected tag            |
+| `gg`/`G`| Jump to top / bottom of tag list                      |
+| `6`     | Return to tag browser (press any other view key to leave) |
+
+---
+
+## Smart Filter (key `f`)
+
+Smart filters are post-filters applied over the ViewAll document list. Press `f` repeatedly to cycle:
+
+| Filter       | What it shows                                   |
+|--------------|-------------------------------------------------|
+| None         | All documents (default)                         |
+| Untagged     | Documents with no tags                          |
+| Stale        | Documents not modified in the last 7 days       |
+| Inbox        | Documents with `type: unsorted`                 |
+
+The active filter is shown as a bar below the panel header and in the status bar.
 
 ---
 
@@ -107,22 +147,23 @@ Entered via `/` in normal mode. Type to fuzzy-search, results update live.
 
 These conventions guide keybinding decisions and should be maintained as new actions are added:
 
-- **Lowercase** for common, non-destructive actions (`j`, `k`, `s`, `n`, `e`)
-- **Uppercase** for infrequent or potentially destructive actions (`R` for re-scan, `D` for force-delete if added)
-- **Numbers** for view switching (`1`–`5`)
+- **Lowercase** for common, non-destructive actions (`j`, `k`, `s`, `n`, `e`, `p`, `f`)
+- **Uppercase** for infrequent actions (`R` for re-scan)
+- **Numbers** for view switching (`1`–`6`)
 - **Single letter** preferred over chords for high-frequency actions
 - **Vim muscle memory** respected — `hjkl`, `gg`/`G`, `/`, `:`, `q` behave as expected
 - **No collisions** — every key has exactly one action per mode
 
 ---
 
-## TODO
+## TODO (Phase 5+ deferred)
 
 - [x] Finalize keybindings for Phase 4 features (`Enter`, `s`, `ctrl+g`)
-- [ ] Decide on `j`/`k` vs arrow keys for search result navigation
-- [ ] Revisit `g` vs `ctrl+g` for lazygit after real usage in Phase 4
+- [x] Define delete confirmation keybindings (`d` to initiate, `y`/`n`/`Esc` to confirm/cancel)
+- [x] Define tag browser keybindings
+- [x] Define smart filter cycling (`f`)
+- [x] Define pin/unpin (`p`)
+- [ ] Decide on `j`/`k` vs arrow keys for search result navigation (deferred — real usage needed)
+- [ ] Revisit `g` vs `ctrl+g` for lazygit (deferred — real usage needed)
 - [ ] Define TODO-specific keybindings (mark done, change status, change category)
-- [ ] Define tag browser keybindings
-- [ ] Define delete confirmation keybindings (`d` to initiate, `y`/`n` or `Enter`/`Esc` to confirm)
 - [ ] Test for ergonomic conflicts with common terminal emulator shortcuts
-- [ ] Full keybinding review and rationalization at Phase 5 start

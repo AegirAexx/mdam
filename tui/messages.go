@@ -57,3 +57,22 @@ type editorReturnMsg struct {
 type scratchReadyMsg struct {
 	path string
 }
+
+// previewReadyMsg is sent when glamour has finished rendering a document preview.
+type previewReadyMsg struct {
+	content string
+}
+
+// pinsLoadedMsg is sent when the pinned document paths file has been read.
+type pinsLoadedMsg struct {
+	pins map[string]bool
+	err  error
+}
+
+// tagIndexMsg is sent when the tag index has been built from the document list.
+type tagIndexMsg struct {
+	entries []tagEntry
+}
+
+// tickMsg is sent by the spinner tick to advance the loading animation frame.
+type tickMsg struct{}
