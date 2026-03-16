@@ -1,10 +1,10 @@
-# MadaM — Keybinding Reference
+# mdam — Keybinding Reference
 
-> **Status:** Current through Phase 5. Full keybinding review completed at Phase 5 start. Additional Phase 5 items (TODO-specific bindings, `g` vs `ctrl+g` revisit) deferred to real usage data.
+> **Status:** Current through Phase 5. All keybindings are implemented but ⚠️ untested. Additional items (TODO-specific bindings, `g` vs `ctrl+g` revisit) deferred to real usage data.
 
 ## Modes
 
-MadaM's TUI operates in four modes. There is no insert or visual mode — all text editing is handled by `$EDITOR`.
+mdam's TUI operates in four modes. There is no insert or visual mode — all text editing is handled by `$EDITOR`.
 
 | Mode          | Purpose                                   | Activation     | Exit              |
 |---------------|-------------------------------------------|----------------|-------------------|
@@ -67,14 +67,14 @@ MadaM's TUI operates in four modes. There is no insert or visual mode — all te
 |----------|--------------------------------------|
 | `ctrl+g` | Open lazygit in the managed tree     |
 
-> **Note:** `ctrl+g` is used instead of `g` to avoid conflicting with the `gg` jump-to-top chord. This will be reconsidered after Phase 5 real usage data is available.
+> **Note:** `ctrl+g` is used instead of `g` to avoid conflicting with the `gg` jump-to-top chord. This will be reconsidered after real usage data is available.
 
 ### Application
 
 | Key  | Action                     |
 |------|----------------------------|
 | `?`  | Toggle keybinding help overlay |
-| `q`  | Quit MadaM                 |
+| `q`  | Quit mdam                  |
 | `R`  | Force re-scan directory tree |
 
 ---
@@ -156,7 +156,7 @@ These conventions guide keybinding decisions and should be maintained as new act
 
 ---
 
-## TODO (Phase 5+ deferred)
+## TODO (deferred)
 
 - [x] Finalize keybindings for Phase 4 features (`Enter`, `s`, `ctrl+g`)
 - [x] Define delete confirmation keybindings (`d` to initiate, `y`/`n`/`Esc` to confirm/cancel)

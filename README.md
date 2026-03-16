@@ -1,16 +1,34 @@
-# MadaM — Markdown Admin Management
+# mdam — /ˈmæd.əm/
 
-A keyboard-centric TUI tool for managing markdown documents, daily journals, and TODOs.
+> **Madam** by name, `mdam` by command — a keyboard-centric TUI tool for managing markdown documents, daily journals, and TODOs.
 
-**Design philosophy:** The filesystem is the database. Your editor does the editing. MadaM handles organization, navigation, and workflow automation — it never edits document bodies.
+Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https://github.com/Julien-cpsMusic/ATAC) (keyboard-driven TUI design) and [zk](https://github.com/zk-org/zk) (plain-file notebook management).
 
-> **Status: early alpha.** Core functionality is complete and tested, but the CLI surface and config format may change before 1.0.
+**Design philosophy:**
+
+- The filesystem is the database — no SQL, no cache, no sync service.
+- Your editor does the editing — mdam never touches document bodies.
+- mdam handles organization, navigation, and workflow automation.
+
+> **Status: v0.1.0 — early, untested alpha.**
+> All planned features are implemented but **none have been fully tested or verified**. Do not rely on any part of mdam for important data yet. The CLI surface, config format, and behavior may all change. Currently in active testing — features will be marked as tested individually as they are confirmed working.
 
 ---
 
 ## Installation
 
-**Prerequisites:** Go 1.21+, `$EDITOR` set (e.g., `nvim`), Git
+### Prerequisites
+
+- Go 1.21+
+- `$EDITOR` environment variable set (e.g., `nvim`)
+- Git
+
+### Recommended companion tools
+
+- [neovim](https://neovim.io/) — mdam delegates all editing to `$EDITOR`; nvim pairs well
+- [lazygit](https://github.com/jesseduffield/lazygit) — mdam can hand off to lazygit for git operations (`ctrl+g`)
+
+### Build from source
 
 ```bash
 git clone https://github.com/AegirAexx/mdam.git
@@ -20,7 +38,17 @@ go build -o mdam ./cmd/mdam
 mv mdam ~/.local/bin/
 ```
 
-**First run:** On first launch, MadaM detects a missing `base_dir` and runs an interactive setup to create your managed document tree and config file.
+### First run
+
+On first launch, mdam detects that no `base_dir` has been configured and starts an interactive setup flow. This will:
+
+1. Prompt you for a base directory path (e.g., `~/notes`) — this becomes the root of your managed document tree.
+2. Create the directory structure: `journal/`, `kb/`, `todo/`, `scratch/`, and `.templates/`.
+3. Generate a default config file at `~/.config/mdam/config.yml`.
+4. Seed the `.templates/` directory with built-in templates for journals, knowledge base documents, and TODOs.
+5. Create an empty scratch pad at `scratch/scratch.md`.
+
+This setup is fully idempotent — running it again won't overwrite existing files or directories.
 
 ---
 
@@ -84,7 +112,7 @@ See [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the full reference.
 
 ## Configuration
 
-MadaM reads `~/.config/mdam/config.yml`. Run `mdam config --edit` to open it.
+mdam reads `~/.config/mdam/config.yml`. Run `mdam config --edit` to open it.
 
 ```yaml
 editor: nvim                      # falls back to $EDITOR env var
@@ -111,20 +139,22 @@ journal:
 
 ## Features
 
-- **Daily journals** — Auto-created from templates, named `YYYY-MM-DD.md`, sweep TODOs on create
-- **Knowledge base** — Organized reference documents with user-defined taxonomy and tags
-- **TODO system** — Task backlog with category, priority, and date fields; sweep from journals
-- **Scratch pad** — Persistent clipboard singleton, one keypress away (`s`)
-- **Templates** — User-extensible document scaffolding; add `.md` files to `{base_dir}/.templates/`
-- **Fuzzy search** — Across frontmatter fields, filenames, and document content
-- **Export** — Strip frontmatter and share clean markdown (`e` or `mdam export`)
-- **Git integration** — Per-file status markers in the TUI, lazygit handoff via `ctrl+g`
-- **Dashboard** — Today's journal, open TODO count, pinned docs, and recent activity (`1`)
-- **Tag browser** — All tags with document counts; drill into any tag (`6`)
-- **Smart filter** — Post-filter by Untagged / Stale (>7 days) / Inbox (`f`)
-- **Pin / unpin** — Bookmark documents; pins persist to `~/.config/mdam/pins.json` (`p`)
-- **Color theming** — Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula
-- **Markdown preview** — Glamour-rendered live preview in the right panel
+| Feature | Status | Description |
+|---|---|---|
+| Daily journals | ⚠️ untested | Auto-created from templates, named `YYYY-MM-DD.md`, sweep TODOs on create |
+| Knowledge base | ⚠️ untested | Organized reference documents with user-defined taxonomy and tags |
+| TODO system | ⚠️ untested | Task backlog with category, priority, and date fields; sweep from journals |
+| Scratch pad | ⚠️ untested | Persistent clipboard singleton, one keypress away (`s`) |
+| Templates | ⚠️ untested | User-extensible document scaffolding; add `.md` files to `{base_dir}/.templates/` |
+| Fuzzy search | ⚠️ untested | Across frontmatter fields, filenames, and document content |
+| Export | ⚠️ untested | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
+| Git integration | ⚠️ untested | Per-file status markers in the TUI, lazygit handoff via `ctrl+g` |
+| Dashboard | ⚠️ untested | Today's journal, open TODO count, pinned docs, and recent activity (`1`) |
+| Tag browser | ⚠️ untested | All tags with document counts; drill into any tag (`6`) |
+| Smart filter | ⚠️ untested | Post-filter by Untagged / Stale (>7 days) / Inbox (`f`) |
+| Pin / unpin | ⚠️ untested | Bookmark documents; pins persist to `~/.config/mdam/pins.json` (`p`) |
+| Color theming | ⚠️ untested | Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula |
+| Markdown preview | ⚠️ untested | Glamour-rendered live preview in the right panel |
 
 ---
 

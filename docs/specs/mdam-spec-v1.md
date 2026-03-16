@@ -1,12 +1,16 @@
-# MadaM — Markdown Admin Management
+# mdam — /ˈmæd.əm/ — Markdown Admin Management
 
 ## Project Specification v1.0
+
+> **Version: v0.1.0 — early, untested alpha.** All planned features are implemented but none have been individually tested or verified. The CLI surface, config format, and behavior may all change.
 
 ---
 
 ## 1. Overview
 
-MadaM is a terminal-based markdown administration and routing tool for personal knowledge management. It manages, organizes, navigates, and automates workflows around markdown documents. It does not edit them. All viewing and authoring is delegated to the user's external `$EDITOR`.
+mdam is a terminal-based markdown administration and routing tool for personal knowledge management. It manages, organizes, navigates, and automates workflows around markdown documents. It does not edit them. All viewing and authoring is delegated to the user's external `$EDITOR`.
+
+Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https://github.com/Julien-cpsMusic/ATAC) (keyboard-driven TUI design) and [zk](https://github.com/zk-org/zk) (plain-file notebook management).
 
 The filesystem is the absolute source of truth. There is no database, no caching layer, no state synchronization. The application relies entirely on raw I/O performance to scan and parse the managed directory tree on every relevant operation.
 
@@ -16,19 +20,13 @@ The command is `mdam`. It operates in two modes: as an interactive TUI and as a 
 
 ## 2. Design Philosophy
 
-**Admin tool, not an editor.** The TUI handles navigation, selection, file creation, organization, and automation. The moment a document needs to be read or written by a human, the application suspends and hands control to `$EDITOR`. On editor exit, the application resumes and re-scans.
-
-**Filesystem is the database.** Folder structure defines categorization. File content and YAML frontmatter define metadata. Nothing is derived, cached, or stored outside the file tree.
-
-**Stateless by default.** Every operation reads from disk. No in-memory state persists between operations except what BubbleTea's model holds for the current render cycle.
-
-**Standard library first.** The Go standard library is preferred over third-party packages wherever feasible. External dependencies are adopted only when they provide substantial value that cannot be reasonably achieved with the stdlib (e.g., BubbleTea for the TUI event loop, Cobra for CLI subcommand routing).
-
-**Test-first.** Standard Go table-driven tests alongside every function from the first line of source code. The headless engine is fully verified before any UI exists.
-
-**Dual interface.** Every core engine feature is accessible both through the interactive TUI and as a headless CLI subcommand. The TUI is the primary interface but the engine never depends on it. A sysadmin should be able to run `mdam todo list --status open --category work` in a shell script without launching the TUI.
-
-**Agent-friendly by convention.** Consistent frontmatter contracts, predictable folder conventions, and machine-readable metadata make the managed tree naturally consumable by external tools and LLM agents without coupling the engine to any specific framework.
+- **Admin tool, not an editor.** The TUI handles navigation, selection, file creation, organization, and automation. The moment a document needs to be read or written by a human, the application suspends and hands control to `$EDITOR`. On editor exit, the application resumes and re-scans.
+- **Filesystem is the database.** Folder structure defines categorization. File content and YAML frontmatter define metadata. Nothing is derived, cached, or stored outside the file tree.
+- **Stateless by default.** Every operation reads from disk. No in-memory state persists between operations except what BubbleTea's model holds for the current render cycle.
+- **Standard library first.** The Go standard library is preferred over third-party packages wherever feasible. External dependencies are adopted only when they provide substantial value that cannot be reasonably achieved with the stdlib (e.g., BubbleTea for the TUI event loop, Cobra for CLI subcommand routing).
+- **Test-first.** Standard Go table-driven tests alongside every function from the first line of source code. The headless engine is fully verified before any UI exists.
+- **Dual interface.** Every core engine feature is accessible both through the interactive TUI and as a headless CLI subcommand. The TUI is the primary interface but the engine never depends on it. A sysadmin should be able to run `mdam todo list --status open --category work` in a shell script without launching the TUI.
+- **Agent-friendly by convention.** Consistent frontmatter contracts, predictable folder conventions, and machine-readable metadata make the managed tree naturally consumable by external tools and LLM agents without coupling the engine to any specific framework.
 
 ---
 
@@ -286,7 +284,7 @@ This mirrors the same data model as the user's existing `ws_status` fish functio
 
 #### 3.10.2 Lazygit Handoff
 
-A dedicated keybinding (e.g., `g`) suspends the TUI and opens `lazygit` in the managed tree's root directory. Same suspension/resume pattern as the `$EDITOR` handoff. On lazygit exit, the TUI resumes and re-scans.
+A dedicated keybinding (`ctrl+g`) suspends the TUI and opens `lazygit` in the managed tree's root directory. Same suspension/resume pattern as the `$EDITOR` handoff. On lazygit exit, the TUI resumes and re-scans.
 
 This keeps git operations in a tool purpose-built for them. The TUI does not attempt to replicate lazygit's functionality.
 
@@ -344,7 +342,7 @@ The same pattern is used for the lazygit handoff.
 | `q`        | Quit                                   |
 | `gg` / `G` | Top / bottom of list                  |
 | `Tab`      | Switch panel focus                     |
-| `g`        | Open lazygit                           |
+| `ctrl+g`   | Open lazygit                           |
 | `s`        | Open scratch pad in `$EDITOR`          |
 | `?`        | Show keybinding help                   |
 
@@ -516,7 +514,7 @@ Passive discoverability built into the TUI layout so documents surface through b
 ├─ TODOs ────────────────┤                                      │
 │ 3 open · 1 in-progress│                                      │
 └────────────────────────┴──────────────────────────────────────┘
- NORMAL │ journal/ │ 12 docs │ /search  :cmd  ?help  g:lazygit
+ NORMAL │ journal/ │ 12 docs │ /search  :cmd  ?help  ^g:lazygit
 ```
 
 4. **Map wireframe panels to components.** Left pane = `bubbles/list`. Right pane = `bubbles/viewport` with `glamour` rendering. Status bar = custom lipgloss-styled component. Each panel has a clear BubbleTea model and update function.
@@ -558,13 +556,14 @@ import:
   auto_fix: false                     # auto-fix validation issues without prompting
 
 # ── Theme ────────────────────────────────────────────────────
-theme: tokyonight                     # nord, dracula, catppuccin, gruvbox, etc.
+theme: tokyonight                     # nord, dracula, catppuccin, gruvbox
+nerd_fonts: false                     # true if terminal font has Nerd Font glyphs
 
 # ── Git ──────────────────────────────────────────────────────
 git:
   enabled: true
   auto_commit: false                  # auto-commit on engine mutations (sweep, journal create, import)
-  lazygit: true                       # enable lazygit handoff via 'g' key
+  lazygit: true                       # enable lazygit handoff via ctrl+g
 
 # ── TODO ─────────────────────────────────────────────────────
 todo:
