@@ -1,6 +1,8 @@
-# CLAUDE.md — MadaM Project Context
+# CLAUDE.md — mdam Project Context
 
-MadaM (Markdown Admin Management) is a Go TUI tool that manages markdown documents, journals, and TODOs. It is an admin/routing tool — it never edits documents. All editing is delegated to `$EDITOR`. The filesystem is the database.
+mdam (Markdown Admin Management) is a Go TUI tool that manages markdown documents, journals, and TODOs. It is an admin/routing tool — it never edits documents. All editing is delegated to `$EDITOR`. The filesystem is the database.
+
+> **Status: v0.1.0 — early, untested alpha.** All features are implemented but none have been individually tested or verified. Do not rely on any part of mdam for important data yet.
 
 ## Commands
 
@@ -17,6 +19,7 @@ go build -o mdam ./cmd/mdam   # Build binary
 - `cmd/mdam/` — Application entrypoint, Cobra root command
 - `internal/cli/` — Cobra subcommand wiring — no business logic here
 - `internal/config/` — Config loading (Viper, `~/.config/mdam/config.yml`)
+- `internal/setup/` — First-run detection, config/dir scaffolding, template seeding
 - `internal/document/` — Markdown document model, frontmatter parsing/validation
 - `internal/importer/` — Import pipeline, filename and frontmatter validation
 - `internal/journal/` — Journal creation, date management
@@ -87,6 +90,14 @@ Document type determines destination directory:
 - `type: todo` → `todo/todo.md`
 - `type: unsorted` → `{base_dir}/{kebab-title}.md`
 
+## Versioning
+
+mdam follows Semantic Versioning (SemVer). The current version is `v0.1.0`. The `0.x` range signals pre-release — nothing is guaranteed stable. Versions are tracked via git tags (`git tag v0.1.0`). GitHub Releases will be added later when there is an audience.
+
+- **Patch** (`0.1.x`) — bug fixes, doc updates, small corrections found during testing
+- **Minor** (`0.x.0`) — completing a testing pass, notable behavior/config/CLI changes
+- **1.0.0** — all features tested, CLI surface locked, config format locked
+
 ## Working on Issues
 
 When given a GitHub issue or bug report:
@@ -103,3 +114,7 @@ When given a GitHub issue or bug report:
 - `docs/specs/mdam-spec-v1.md` — Full project specification
 - `docs/KEYBINDINGS.md` — TUI keybinding reference
 - `docs/HANDOFF.md` — Complete project state for future sessions
+- `docs/CLI.md` — Full CLI subcommand reference
+- `docs/FRONTMATTER.md` — Frontmatter field contract
+- `docs/TODO-FORMAT.md` — TODO task syntax and sweep/archive
+- `docs/DEVELOPMENT.md` — Project structure, code style, testing

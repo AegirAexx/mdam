@@ -1,12 +1,12 @@
-# MadaM — Project Handoff
+# mdam — Project Handoff
 
-> Complete project state as of Phase 5 + Issues #1, #4, #3, #2, #5 fixed. All five phases are implemented and passing. This document is the single source of truth for any future session or collaborator picking up the project.
+> Complete project state as of Phase 5 + Issues #1, #4, #3, #2, #5 fixed. All five phases are implemented and passing. No features have been individually tested or verified yet. This document is the single source of truth for any future session or collaborator picking up the project.
 
 ---
 
-## 1. What MadaM Is
+## 1. What mdam Is
 
-MadaM (Markdown Admin Management) is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base documents, TODOs, and scratch notes. It is an **administration and routing tool**, not an editor. All text editing is delegated to `$EDITOR`. The filesystem is the database; there is no SQL layer, no cache, no sync service. Git provides version control and multi-device sync via a lazygit handoff (`ctrl+g`).
+mdam (Markdown Admin Management) is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base documents, TODOs, and scratch notes. It is an **administration and routing tool**, not an editor. All text editing is delegated to `$EDITOR`. The filesystem is the database; there is no SQL layer, no cache, no sync service. Git provides version control and multi-device sync via a lazygit handoff (`ctrl+g`).
 
 ---
 
@@ -24,6 +24,8 @@ These three commands are the mandatory gate after every change. Never commit wit
 ---
 
 ## 3. Complete Feature Inventory
+
+> **Note:** All features below are implemented but ⚠️ untested. None have been individually verified as working correctly.
 
 ### Engine (Phases 1–3, headless, all CLI-accessible)
 
