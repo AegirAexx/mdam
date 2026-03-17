@@ -1,5 +1,5 @@
 # Binaries
-mdam
+/mdam
 *.exe
 *.exe~
 *.dll
