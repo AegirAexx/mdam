@@ -149,6 +149,13 @@ func TestImportFileDuplicate(t *testing.T) {
 	}
 }
 
+func TestImportFileIsDirectory(t *testing.T) {
+	_, err := ImportFile(t.TempDir(), "", Options{})
+	if err == nil {
+		t.Error("ImportFile() on directory: expected error, got nil")
+	}
+}
+
 func TestImportDir(t *testing.T) {
 	inboxDir := t.TempDir()
 	baseDir := t.TempDir()

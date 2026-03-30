@@ -3,6 +3,7 @@ package document
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -163,6 +164,7 @@ func TestValidateFrontmatter(t *testing.T) {
 		{"type todo", func() Frontmatter { f := good; f.Type = "todo"; return f }(), false},
 		{"type scratch", func() Frontmatter { f := good; f.Type = "scratch"; return f }(), false},
 		{"type unsorted", func() Frontmatter { f := good; f.Type = "unsorted"; return f }(), false},
+		{"whitespace title", func() Frontmatter { f := good; f.Title = "   "; return f }(), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,6 +173,39 @@ func TestValidateFrontmatter(t *testing.T) {
 				t.Errorf("ValidateFrontmatter() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestRenderFrontmatterFieldOrder(t *testing.T) {
+	fm := Frontmatter{
+		Type:     "kb",
+		Title:    "Test",
+		Tags:     []string{},
+		Created:  time.Now(),
+		Modified: time.Now(),
+	}
+	out, err := RenderFrontmatter(fm)
+	if err != nil {
+		t.Fatalf("RenderFrontmatter() error = %v", err)
+	}
+	// Walk lines between the --- delimiters and collect keys in order.
+	wantOrder := []string{"type:", "title:", "tags:", "created:", "modified:"}
+	var foundOrder []string
+	for _, line := range strings.Split(out, "\n") {
+		for _, key := range wantOrder {
+			if strings.HasPrefix(line, key) {
+				foundOrder = append(foundOrder, key)
+				break
+			}
+		}
+	}
+	if len(foundOrder) != len(wantOrder) {
+		t.Fatalf("RenderFrontmatter() found keys %v, want %v", foundOrder, wantOrder)
+	}
+	for i := range wantOrder {
+		if foundOrder[i] != wantOrder[i] {
+			t.Errorf("field order[%d] = %q, want %q", i, foundOrder[i], wantOrder[i])
+		}
 	}
 }
 
