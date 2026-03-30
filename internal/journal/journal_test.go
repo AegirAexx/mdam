@@ -172,6 +172,42 @@ func TestListByMonth(t *testing.T) {
 	}
 }
 
+func TestPastEntries(t *testing.T) {
+	dir := t.TempDir()
+
+	yesterday := time.Now().AddDate(0, 0, -1)
+	today := time.Now()
+	tomorrow := time.Now().AddDate(0, 0, 1)
+
+	for _, d := range []time.Time{yesterday, today, tomorrow} {
+		name := d.Format(DateFormat) + ".md"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(""), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	past, err := PastEntries(dir)
+	if err != nil {
+		t.Fatalf("PastEntries() error = %v", err)
+	}
+	if len(past) != 1 {
+		t.Fatalf("PastEntries() returned %d entries, want 1", len(past))
+	}
+	if !strings.Contains(past[0], yesterday.Format(DateFormat)) {
+		t.Errorf("PastEntries()[0] = %q, want yesterday (%s)", past[0], yesterday.Format(DateFormat))
+	}
+}
+
+func TestPastEntriesEmptyDir(t *testing.T) {
+	past, err := PastEntries(t.TempDir())
+	if err != nil {
+		t.Fatalf("PastEntries() on empty dir error = %v", err)
+	}
+	if len(past) != 0 {
+		t.Errorf("PastEntries() = %v, want empty", past)
+	}
+}
+
 func TestScaffoldFrontmatter(t *testing.T) {
 	date := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
 	fm := ScaffoldFrontmatter(date)

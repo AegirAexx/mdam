@@ -1372,5 +1372,27 @@ func TestKBTemplateNoBuiltinVarsPrompted(t *testing.T) {
 	}
 }
 
+func TestSmartFilterStaleWeek(t *testing.T) {
+	stale := search.Result{
+		Path: "/notes/stale.md",
+		Frontmatter: document.Frontmatter{
+			Modified: time.Now().AddDate(0, 0, -10),
+		},
+	}
+	recent := search.Result{
+		Path: "/notes/recent.md",
+		Frontmatter: document.Frontmatter{
+			Modified: time.Now().AddDate(0, 0, -3),
+		},
+	}
+	result := applySmartFilter([]search.Result{stale, recent}, SmartFilterStaleWeek)
+	if len(result) != 1 {
+		t.Fatalf("SmartFilterStaleWeek: got %d results, want 1", len(result))
+	}
+	if result[0].Path != stale.Path {
+		t.Errorf("SmartFilterStaleWeek: got %q, want %q", result[0].Path, stale.Path)
+	}
+}
+
 // reusable for other packages
 var _ = filepath.Join // keep filepath import used

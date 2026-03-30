@@ -122,6 +122,118 @@ func TestStatusBranch(t *testing.T) {
 	}
 }
 
+func TestPorcelainStagedFile(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("git not available")
+	}
+	dir := initRepo(t)
+
+	// Create and commit an initial file.
+	initial := filepath.Join(dir, "initial.md")
+	if err := os.WriteFile(initial, []byte("# Init\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "initial.md"},
+		{"git", "commit", "-m", "init"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s: %v", args, string(out), err)
+		}
+	}
+
+	// Stage a new file.
+	if err := os.WriteFile(filepath.Join(dir, "new.md"), []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "add", "new.md")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %s: %v", string(out), err)
+	}
+
+	files, err := porcelain(dir)
+	if err != nil {
+		t.Fatalf("porcelain() error = %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("porcelain() returned %d files, want 1", len(files))
+	}
+	if files[0].X != 'A' {
+		t.Errorf("X = %c, want A", files[0].X)
+	}
+	if !files[0].IsStaged() {
+		t.Error("IsStaged() = false, want true")
+	}
+}
+
+func TestStashCount(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("git not available")
+	}
+	dir := initRepo(t)
+
+	// Create and commit an initial file.
+	initial := filepath.Join(dir, "initial.md")
+	if err := os.WriteFile(initial, []byte("# Init\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "initial.md"},
+		{"git", "commit", "-m", "init"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s: %v", args, string(out), err)
+		}
+	}
+
+	// Zero stashes before stashing.
+	n, err := stashCount(dir)
+	if err != nil {
+		t.Fatalf("stashCount() error = %v", err)
+	}
+	if n != 0 {
+		t.Errorf("stashCount() = %d, want 0", n)
+	}
+
+	// Modify file and stash.
+	if err := os.WriteFile(initial, []byte("# Modified\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stashCmd := exec.Command("git", "stash", "push", "-m", "test stash")
+	stashCmd.Dir = dir
+	if out, err := stashCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git stash push: %s: %v", string(out), err)
+	}
+
+	n, err = stashCount(dir)
+	if err != nil {
+		t.Fatalf("stashCount() after stash error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("stashCount() = %d, want 1", n)
+	}
+
+	// Pop the stash.
+	popCmd := exec.Command("git", "stash", "pop")
+	popCmd.Dir = dir
+	if out, err := popCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git stash pop: %s: %v", string(out), err)
+	}
+
+	n2, err := stashCount(dir)
+	if err != nil {
+		t.Fatalf("stashCount() after pop error = %v", err)
+	}
+	if n2 != 0 {
+		t.Errorf("stashCount() after pop = %d, want 0", n2)
+	}
+}
+
 func TestFileStatusHelpers(t *testing.T) {
 	tests := []struct {
 		fs          FileStatus

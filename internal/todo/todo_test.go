@@ -17,6 +17,7 @@ func TestParseTask(t *testing.T) {
 		wantText     string
 		wantCategory string
 		wantPriority string
+		wantCreated  string
 	}{
 		{
 			name:       "open task",
@@ -63,6 +64,14 @@ func TestParseTask(t *testing.T) {
 			wantText:     "Review PR #42",
 			wantCategory: "work",
 			wantPriority: "high",
+			wantCreated:  "2026-03-14",
+		},
+		{
+			name:       "in-progress task",
+			line:       "- [ ] ~Working on it~",
+			wantOk:     true,
+			wantStatus: StatusInProgress,
+			wantText:   "~Working on it~",
 		},
 		{
 			name:   "not a task",
@@ -103,6 +112,9 @@ func TestParseTask(t *testing.T) {
 			}
 			if tt.wantPriority != "" && task.Priority != tt.wantPriority {
 				t.Errorf("Priority = %q, want %q", task.Priority, tt.wantPriority)
+			}
+			if tt.wantCreated != "" && task.Created.Format("2006-01-02") != tt.wantCreated {
+				t.Errorf("Created = %v, want %s", task.Created, tt.wantCreated)
 			}
 		})
 	}
