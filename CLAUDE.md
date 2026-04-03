@@ -31,7 +31,7 @@ Field order is mandatory for consistency:
 
 ```yaml
 ---
-type: journal        # FIRST. One of: journal, kb, todo, scratch, unsorted
+type: journal        # FIRST.
 title: 2026-03-15
 tags: []
 created: 2026-03-15

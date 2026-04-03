@@ -115,23 +115,51 @@ See [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the full reference.
 mdam reads `~/.config/mdam/config.yml`. Run `mdam config --edit` to open it.
 
 ```yaml
-editor: nvim                      # falls back to $EDITOR env var
-author: "Your Name"
-base_dir: ~/notes                 # root of your managed document tree
+# mdam configuration — generated on first run.
+
+# Text editor to open documents (defaults to $EDITOR).
+editor: "nvim"
+
+# Your name, used for document metadata.
+author: "AegirAexx"
+
+# Root directory where MadaM manages your documents.
+# Leave empty to be prompted on every startup until set.
+base_dir: /home/aexx/notes
+
+# Directory for exported documents (frontmatter stripped).
 export_dir: ~/Downloads
 
-theme: tokyonight                 # nord, gruvbox, catppuccin, dracula
-nerd_fonts: false                 # true if your terminal font has Nerd Font glyphs
+# TUI color theme. Options: tokyonight, nord, gruvbox, catppuccin, dracula
+theme: tokyonight
+
+# Use Nerd Font icons in the TUI (requires a patched terminal font).
+nerd_fonts: true
+
+import:
+  # Directory for files dropped in for import. Defaults to {base_dir}/.inbox.
+  inbox_dir: ""
+  # Auto-fix invalid filenames and frontmatter during import.
+  auto_fix: false
 
 git:
+  # Enable git integration (shows modified/untracked indicators).
   enabled: true
-  lazygit: true                   # ctrl+g handoff to lazygit
+  # Automatically commit after edits.
+  auto_commit: false
+  # Use lazygit for git operations.
+  lazygit: true
 
 todo:
+  # Default category for new TODO items.
+  default_category: personal
+  # Days before completed tasks are moved to archive.
   archive_after_days: 30
 
 journal:
+  # Automatically create today's journal entry on startup.
   auto_create: true
+  # Sweep incomplete tasks from past entries when creating a new journal.
   sweep_on_create: true
 ```
 
