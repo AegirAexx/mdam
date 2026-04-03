@@ -1,120 +1,64 @@
 # CLAUDE.md — mdam Project Context
 
-mdam (Markdown Admin Management) is a Go TUI tool that manages markdown documents, journals, and TODOs. It is an admin/routing tool — it never edits documents. All editing is delegated to `$EDITOR`. The filesystem is the database.
+mdam is a Go TUI tool for managing markdown documents, journals, and TODOs.
+It is an admin/routing tool — it never edits document bodies. All editing is delegated to `$EDITOR`. The filesystem is the database. No caching, no in-memory state that persists between function calls.
 
-> **Status: v0.1.0 — early, untested alpha.** All features are implemented but none have been individually tested or verified. Do not rely on any part of mdam for important data yet.
+**Status: v0.1.0 — early alpha. No features have been individually tested.**
 
-## Commands
+## Mandatory After Every Change
 
-```bash
-go test ./...                 # Run all tests (MANDATORY after every change)
-go vet ./...                  # Static analysis (MANDATORY after every change)
-go build -o mdam ./cmd/mdam   # Build binary
-```
+- `go test ./...` — no exceptions, never commit a failing test
+- `go vet ./...` — no exceptions, never commit a vet warning
 
-**Never commit with a failing test or vet warning.**
+## Code Rules
 
-## Architecture
+- **Stdlib first.** Never add a new dependency without explicit approval.
+- **No panics.** Return errors. Wrap with context: `fmt.Errorf("doing thing: %w", err)`
+- **File paths** always use `filepath.Join()`, never string concatenation.
+- **Functions** are small and pure. Under 50 lines where possible.
+- **Tests** are table-driven, in `_test.go` files, using only the `testing` package.
+- **TUI tests** use `stripANSI()` helper for assertions against rendered output.
 
-- `cmd/mdam/` — Application entrypoint, Cobra root command
-- `internal/cli/` — Cobra subcommand wiring — no business logic here
-- `internal/config/` — Config loading (Viper, `~/.config/mdam/config.yml`)
-- `internal/setup/` — First-run detection, config/dir scaffolding, template seeding
-- `internal/document/` — Markdown document model, frontmatter parsing/validation
-- `internal/importer/` — Import pipeline, filename and frontmatter validation
-- `internal/journal/` — Journal creation, date management
-- `internal/todo/` — TODO parsing, sweep logic, archive
-- `internal/template/` — Template discovery and variable interpolation
-- `internal/search/` — Fuzzy search across frontmatter and filenames
-- `internal/export/` — Frontmatter stripping for sharing
-- `internal/git/` — Git status detection (shells out to `git`)
-- `tui/` — BubbleTea TUI (all TUI code lives here)
+## Non-Obvious Constraints
 
-## Rules
-
-### Code Style
-
-- **Standard library first.** ALWAYS prefer Go stdlib over third-party packages. Only use external dependencies listed in go.mod. Do NOT add new dependencies without explicit approval.
-- **Functions are small and pure.** Prefer functions that take inputs and return outputs over methods with side effects. Keep functions under 50 lines where possible.
-- **Error handling.** Return errors, don't panic. Wrap errors with context using `fmt.Errorf("doing thing: %w", err)`.
-- **Naming.** Follow Go conventions: `MixedCaps`, not `snake_case`. Packages are lowercase single words. Exported functions have doc comments.
-- **File paths.** Always use `filepath.Join()`, never string concatenation for paths.
-
-### Testing
-
-- **Test everything.** Every function gets a table-driven test in a `_test.go` file.
-- **Run `go test ./...` after every change.** No exceptions.
-- **Tests use only the `testing` package** — no third-party assertion libraries.
-- **TUI tests use `stripANSI()` helper** for assertions against rendered output.
-
-### Data
-
-- **No caching, no database.** Read from the filesystem on every operation. No in-memory caches that persist between function calls. The filesystem is the source of truth.
-- **No editing.** The application never writes to the markdown body of a document except during TODO sweep. Frontmatter updates are the only other permitted file mutations.
+- The app never writes to a document's markdown body except during TODO sweep.
+- Frontmatter updates are the only other permitted file mutations.
+- No editing. No caching. The filesystem is always the source of truth.
 
 ## Frontmatter Contract
 
-Every managed document has YAML frontmatter. Field order matters for consistency:
+Field order is mandatory for consistency:
 
 ```yaml
 ---
-type: journal              # Required. One of: journal, kb, todo, scratch, unsorted — FIRST field
-title: 2026-03-15          # Required. Human-readable title
-tags: []                   # Required. List of strings
-created: 2026-03-15        # Required. YYYY-MM-DD (emitted as YAML !!timestamp)
-modified: 2026-03-15       # Required. YYYY-MM-DD (emitted as YAML !!timestamp)
+type: journal        # FIRST. One of: journal, kb, todo, scratch, unsorted
+title: 2026-03-15
+tags: []
+created: 2026-03-15
+modified: 2026-03-15
 ---
 ```
 
-Additional fields are passed through without validation.
-
-**Date format:** New documents always emit `YYYY-MM-DD` (date-only) as an unquoted YAML `!!timestamp`. The parser also accepts full ISO 8601 (`2026-03-15T12:32:26Z`) for backwards compatibility. `RenderFrontmatter` uses `*yaml.Node{Tag: "!!timestamp"}` to avoid quoting.
-
-## Folder Structure Convention
-
-```
-{base_dir}/
-├── journal/           # Daily journal entries (YYYY-MM-DD.md)
-├── kb/                # Knowledge base documents
-├── todo/              # Global TODO file
-├── scratch/           # Scratch pad singleton
-├── .inbox/            # Import inbox
-└── .templates/        # User-defined and built-in templates
-```
-
-Document type determines destination directory:
-
-- `type: journal` → `journal/YYYY-MM-DD.md`
-- `type: kb` → `kb/{kebab-title}.md`
-- `type: scratch` → `scratch/scratch.md`
-- `type: todo` → `todo/todo.md`
-- `type: unsorted` → `{base_dir}/{kebab-title}.md`
+- Dates emit as `YYYY-MM-DD` unquoted YAML `!!timestamp` via `*yaml.Node{Tag: "!!timestamp"}`
+- Parser also accepts full ISO 8601 for backwards compatibility
+- Additional fields pass through without validation
 
 ## Versioning
 
-mdam follows Semantic Versioning (SemVer). The current version is `v0.1.0`. The `0.x` range signals pre-release — nothing is guaranteed stable. Versions are tracked via git tags (`git tag v0.1.0`). GitHub Releases will be added later when there is an audience.
-
-- **Patch** (`0.1.x`) — bug fixes, doc updates, small corrections found during testing
-- **Minor** (`0.x.0`) — completing a testing pass, notable behavior/config/CLI changes
-- **1.0.0** — all features tested, CLI surface locked, config format locked
+- **Patch** — bug fixes, small corrections during testing
+- **Minor** — completing a testing pass, notable behavior/CLI/config changes
+- **1.0.0** — all features tested, CLI and config format locked
 
 ## Working on Issues
 
-When given a GitHub issue or bug report:
+1. Read the issue completely before touching anything.
+2. State your plan and list files you'll modify before writing code.
+3. Make the smallest change that fixes the issue. Don't touch unrelated code.
+4. Add or update tests covering the fix.
+5. Run `go test ./...` and `go vet ./...` before declaring done.
+6. Summarize what changed.
 
-1. **Read the issue completely** before making any changes.
-2. **State your plan** before writing code. List the files you'll modify and why.
-3. **Make the smallest change that fixes the issue.** Don't refactor unrelated code.
-4. **Update or add tests** that cover the fix.
-5. **Run `go test ./...` and `go vet ./...`** before declaring done.
-6. **Summarize what you changed** after completing the work.
+## Session Continuity
 
-## Key Documentation
-
-- `docs/specs/mdam-spec-v1.md` — Full project specification
-- `docs/KEYBINDINGS.md` — TUI keybinding reference
-- `docs/HANDOFF.md` — Complete project state for future sessions
-- `docs/CLI.md` — Full CLI subcommand reference
-- `docs/FRONTMATTER.md` — Frontmatter field contract
-- `docs/TODO-FORMAT.md` — TODO task syntax and sweep/archive
-- `docs/DEVELOPMENT.md` — Project structure, code style, testing
+`docs/HANDOFF.md` is the current project state for the next session.
+Read it at the start. Rewrite it at the end — current state only, no history.
