@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/AegirAexx/mdam/internal/search"
 )
 
@@ -40,10 +42,10 @@ func buildTagIndex(docs []search.Result) []tagEntry {
 func (m Model) renderTagBrowser() string {
 	var b strings.Builder
 
-	contentHeight := m.height - 2
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
+	b.WriteString(m.renderTabBar())
+	b.WriteString("\n")
+
+	contentHeight := m.contentHeight()
 
 	leftWidth := m.width / 3
 	rightWidth := m.width - leftWidth - 1
@@ -94,18 +96,17 @@ func (m Model) renderTagPanel(width, height int) string {
 		start = m.tagCursor - visibleRows + 1
 	}
 
+	tagFocused := m.activePanel == PanelFiles
 	for i := start; i < len(m.tagEntries) && len(lines) < height-1; i++ {
 		te := m.tagEntries[i]
-		var line string
 		tagName := m.icons.Tag + te.Name
-		if i == m.tagCursor {
-			cursor := m.theme.FileCursor.Render(m.icons.CursorSel)
-			name := m.theme.FileSelected.Render(truncate(tagName, width-8))
-			count := m.theme.PreviewMeta.Render(fmt.Sprintf(" (%d)", te.Count))
-			line = cursor + name + count
+		countStr := fmt.Sprintf(" (%d)", te.Count)
+		itemText := " " + truncate(tagName, width-len(countStr)-2) + countStr
+		var line string
+		if i == m.tagCursor && tagFocused {
+			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
 		} else {
-			line = "  " + m.theme.FileNormal.Render(truncate(tagName, width-8)) +
-				m.theme.PreviewMeta.Render(fmt.Sprintf(" (%d)", te.Count))
+			line = m.theme.FileNormal.Render(itemText)
 		}
 		lines = append(lines, line)
 	}
@@ -114,7 +115,8 @@ func (m Model) renderTagPanel(width, height int) string {
 
 // renderTagDocPanel renders docs that have the currently selected tag.
 func (m Model) renderTagDocPanel(width, height int) string {
-	header := styledPanelHeader("Documents", false, width, m.theme, m.icons)
+	docFocused := m.activePanel == PanelPreview
+	header := styledPanelHeader("Documents", docFocused, width, m.theme, m.icons)
 	var lines []string
 	lines = append(lines, header)
 
@@ -123,28 +125,25 @@ func (m Model) renderTagDocPanel(width, height int) string {
 		return strings.Join(lines, "\n")
 	}
 
-	selectedTag := m.tagEntries[m.tagCursor].Name
-	var tagged []search.Result
-	for _, d := range m.docs {
-		for _, t := range d.Frontmatter.Tags {
-			if t == selectedTag {
-				tagged = append(tagged, d)
-				break
-			}
-		}
-	}
+	tagged := m.taggedDocs()
 
 	if len(tagged) == 0 {
 		lines = append(lines, "  (no documents)")
 		return strings.Join(lines, "\n")
 	}
 
-	for _, d := range tagged {
+	for i, d := range tagged {
 		if len(lines) >= height-1 {
 			break
 		}
-		name := truncate(d.Frontmatter.Title, width-3)
-		lines = append(lines, "  "+m.theme.FileNormal.Render(name))
+		itemText := " " + truncate(d.Frontmatter.Title, width-2)
+		var line string
+		if i == m.tagDocCursor && docFocused {
+			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+		} else {
+			line = m.theme.FileNormal.Render(itemText)
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }

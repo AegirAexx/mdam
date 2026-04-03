@@ -15,7 +15,7 @@ import (
 	"github.com/AegirAexx/mdam/internal/template"
 )
 
-const defaultConfigYAML = `# MadaM configuration — generated on first run.
+const defaultConfigYAML = `# mdam configuration — generated on first run.
 
 # Text editor to open documents (defaults to $EDITOR).
 editor: ""
@@ -23,7 +23,7 @@ editor: ""
 # Your name, used for document metadata.
 author: ""
 
-# Root directory where MadaM manages your documents.
+# Root directory where mdam manages your documents.
 # Leave empty to be prompted on every startup until set.
 base_dir: ""
 

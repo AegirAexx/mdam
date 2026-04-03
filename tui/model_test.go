@@ -51,8 +51,6 @@ func sendKey(m Model, k string) Model {
 		msg = tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		msg = tea.KeyMsg{Type: tea.KeyDown}
-	case "ctrl+g":
-		msg = tea.KeyMsg{Type: tea.KeyCtrlG}
 	}
 	updated, _ := m.Update(msg)
 	return updated.(Model)
@@ -158,8 +156,8 @@ func TestPanelCycle(t *testing.T) {
 	if p.next() != PanelPreview {
 		t.Errorf("PanelFiles.next() = %v, want PanelPreview", p.next())
 	}
-	if p.prev() != PanelTodo {
-		t.Errorf("PanelFiles.prev() = %v, want PanelTodo", p.prev())
+	if p.prev() != PanelPreview {
+		t.Errorf("PanelFiles.prev() = %v, want PanelPreview", p.prev())
 	}
 	cur := PanelFiles
 	for i := 0; i < int(panelCount); i++ {
@@ -172,33 +170,42 @@ func TestPanelCycle(t *testing.T) {
 
 func TestCursorMovement(t *testing.T) {
 	m := modelWithDocs()
-	initial := m.fileCursor // 0
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	// Expand March 2026 so there are file rows (folder row at 0, files at 1, 2).
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 0
+	initial := m.journalCursor
 
 	m = sendKey(m, "j")
-	if m.fileCursor != initial+1 {
-		t.Errorf("after j: fileCursor = %d, want %d", m.fileCursor, initial+1)
+	if m.journalCursor != initial+1 {
+		t.Errorf("after j: journalCursor = %d, want %d", m.journalCursor, initial+1)
 	}
 
 	m = sendKey(m, "k")
-	if m.fileCursor != initial {
-		t.Errorf("after k: fileCursor = %d, want %d", m.fileCursor, initial)
+	if m.journalCursor != initial {
+		t.Errorf("after k: journalCursor = %d, want %d", m.journalCursor, initial)
 	}
 
 	m = sendKey(m, "k")
-	if m.fileCursor != 0 {
-		t.Errorf("k at top: fileCursor = %d, want 0", m.fileCursor)
+	if m.journalCursor != 0 {
+		t.Errorf("k at top: journalCursor = %d, want 0", m.journalCursor)
 	}
 }
 
 func TestCursorMovementArrowKeys(t *testing.T) {
 	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 0
 	m = sendKey(m, "down")
-	if m.fileCursor != 1 {
-		t.Errorf("after down: fileCursor = %d, want 1", m.fileCursor)
+	if m.journalCursor != 1 {
+		t.Errorf("after down: journalCursor = %d, want 1", m.journalCursor)
 	}
 	m = sendKey(m, "up")
-	if m.fileCursor != 0 {
-		t.Errorf("after up: fileCursor = %d, want 0", m.fileCursor)
+	if m.journalCursor != 0 {
+		t.Errorf("after up: journalCursor = %d, want 0", m.journalCursor)
 	}
 }
 
@@ -213,44 +220,55 @@ func TestJumpBottom(t *testing.T) {
 
 func TestGGChord(t *testing.T) {
 	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 0
+	// Jump to bottom first.
 	m = sendKey(m, "G")
-	if m.fileCursor == 0 {
-		t.Skip("docs has only one item")
+	rows := buildJournalRows(m.docs, m.journalExpanded)
+	if len(rows) < 2 {
+		t.Skip("need at least 2 rows for gg test")
 	}
-	m = sendKey(m, "g")
-	if m.fileCursor != len(fakeDocs)-1 {
-		t.Errorf("after single g, cursor should not move yet")
+	if m.journalCursor != len(rows)-1 {
+		t.Errorf("G: journalCursor = %d, want %d", m.journalCursor, len(rows)-1)
 	}
+	// gg should jump to top.
 	m = sendKey(m, "g")
-	if m.fileCursor != 0 {
-		t.Errorf("after gg: fileCursor = %d, want 0", m.fileCursor)
+	m = sendKey(m, "g")
+	if m.journalCursor != 0 {
+		t.Errorf("after gg: journalCursor = %d, want 0", m.journalCursor)
 	}
 }
 
-func TestTabCyclesPanels(t *testing.T) {
+func TestTabCyclesPanes(t *testing.T) {
 	m := newTestModel()
-	if m.activePanel != PanelFiles {
-		t.Fatalf("initial panel = %v, want PanelFiles", m.activePanel)
+	if m.activeView != ViewDashboard {
+		t.Fatalf("initial view = %v, want ViewDashboard", m.activeView)
 	}
 	m = sendKey(m, "tab")
-	if m.activePanel != PanelPreview {
-		t.Errorf("after tab: panel = %v, want PanelPreview", m.activePanel)
+	if m.activeView != ViewJournal {
+		t.Errorf("after tab: view = %v, want ViewJournal", m.activeView)
 	}
 	m = sendKey(m, "tab")
-	if m.activePanel != PanelTodo {
-		t.Errorf("after second tab: panel = %v, want PanelTodo", m.activePanel)
+	if m.activeView != ViewKB {
+		t.Errorf("after second tab: view = %v, want ViewKB", m.activeView)
 	}
 	m = sendKey(m, "tab")
-	if m.activePanel != PanelFiles {
-		t.Errorf("after third tab: panel = %v, want PanelFiles", m.activePanel)
+	if m.activeView != ViewTags {
+		t.Errorf("after third tab: view = %v, want ViewTags", m.activeView)
+	}
+	m = sendKey(m, "tab")
+	if m.activeView != ViewDashboard {
+		t.Errorf("after fourth tab: view = %v, want ViewDashboard (wrap)", m.activeView)
 	}
 }
 
-func TestShiftTabCyclesPanelsReverse(t *testing.T) {
+func TestShiftTabCyclesPanesReverse(t *testing.T) {
 	m := newTestModel()
 	m = sendKey(m, "shift+tab")
-	if m.activePanel != PanelTodo {
-		t.Errorf("shift+tab from PanelFiles = %v, want PanelTodo", m.activePanel)
+	if m.activeView != ViewTags {
+		t.Errorf("shift+tab from ViewDashboard = %v, want ViewTags", m.activeView)
 	}
 }
 
@@ -324,18 +342,15 @@ func TestWindowResizeUpdatesViewport(t *testing.T) {
 	}
 }
 
-func TestTodoCursorMovement(t *testing.T) {
+func TestViewTagsKeyResetsPanel(t *testing.T) {
 	m := newTestModel()
-	m = sendMsg(m, todosLoadedMsg{tasks: fakeTasks})
-	// Switch to todo panel.
+	m.activePanel = PanelPreview // simulate arriving from another pane with right panel focused
 	m = sendKey(m, "4")
-	m = sendKey(m, "j")
-	if m.todoCursor != 1 {
-		t.Errorf("todo cursor after j = %d, want 1", m.todoCursor)
+	if m.activeView != ViewTags {
+		t.Errorf("key 4: activeView = %v, want ViewTags", m.activeView)
 	}
-	m = sendKey(m, "k")
-	if m.todoCursor != 0 {
-		t.Errorf("todo cursor after k = %d, want 0", m.todoCursor)
+	if m.activePanel != PanelFiles {
+		t.Errorf("key 4: activePanel = %v, want PanelFiles", m.activePanel)
 	}
 }
 
@@ -539,12 +554,12 @@ func TestSearchResults(t *testing.T) {
 	}
 }
 
-func TestVisibleDocsAll(t *testing.T) {
+func TestVisibleDocsDashboard(t *testing.T) {
 	m := modelWithDocs()
-	m.activeView = ViewAll
+	m.activeView = ViewDashboard
 	docs := m.visibleDocs()
 	if len(docs) != len(fakeDocs) {
-		t.Errorf("ViewAll: visible docs = %d, want %d", len(docs), len(fakeDocs))
+		t.Errorf("ViewDashboard: visible docs = %d, want %d", len(docs), len(fakeDocs))
 	}
 }
 
@@ -576,13 +591,11 @@ func TestVisibleDocsKB(t *testing.T) {
 	}
 }
 
-func TestVisibleDocsRecent(t *testing.T) {
-	m := modelWithDocs()
-	m.activeView = ViewRecent
-	docs := m.visibleDocs()
+func TestRecentDocsHelper(t *testing.T) {
+	docs := recentDocs(fakeDocs, 10)
 	for i := 1; i < len(docs); i++ {
 		if docs[i].Frontmatter.Modified.After(docs[i-1].Frontmatter.Modified) {
-			t.Errorf("ViewRecent not sorted by Modified desc at index %d", i)
+			t.Errorf("recentDocs not sorted by Modified desc at index %d", i)
 		}
 	}
 }
@@ -710,9 +723,11 @@ func TestStatusBarShowsDocCount(t *testing.T) {
 	m := modelWithDocs()
 	m.width = 80
 	m.height = 24
+	m.loading = false
 	view := stripANSI(m.View())
-	if !strings.Contains(view, "3 docs") {
-		t.Errorf("status bar missing doc count '3 docs' in view:\n%s", view)
+	// New status bar format: "N journal · N kb · N scratch"
+	if !strings.Contains(view, "journal") {
+		t.Errorf("status bar missing doc count in view:\n%s", view)
 	}
 }
 
@@ -733,10 +748,10 @@ func TestViewSwitching(t *testing.T) {
 		key      string
 		wantView View
 	}{
-		{"1", ViewDashboard}, // key 1 now maps to dashboard
+		{"1", ViewDashboard},
 		{"2", ViewJournal},
 		{"3", ViewKB},
-		{"5", ViewRecent},
+		{"4", ViewTags},
 	}
 	for _, tt := range tests {
 		m2 := sendKey(m, tt.key)
@@ -746,26 +761,26 @@ func TestViewSwitching(t *testing.T) {
 	}
 }
 
-func TestView4SwitchesToTodoPanel(t *testing.T) {
+func TestOldViewKeysNoop(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "4")
-	if m.activePanel != PanelTodo {
-		t.Errorf("key 4: activePanel = %v, want PanelTodo", m.activePanel)
-	}
-	if m.activeView != ViewTodo {
-		t.Errorf("key 4: activeView = %v, want ViewTodo", m.activeView)
+	// Keys 5 and 6 no longer switch views.
+	for _, k := range []string{"5", "6"} {
+		m2 := sendKey(m, k)
+		if m2.activeView != ViewDashboard {
+			t.Errorf("key %q should not change view, got %v", k, m2.activeView)
+		}
 	}
 }
 
-func TestView6SwitchesToTags(t *testing.T) {
+func TestView4SwitchesToTags(t *testing.T) {
 	m := modelWithDocs()
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6")})
-	m2 := sendKey(m, "6")
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+	m2 := sendKey(m, "4")
 	if m2.activeView != ViewTags {
-		t.Errorf("key 6: activeView = %v, want ViewTags", m2.activeView)
+		t.Errorf("key 4: activeView = %v, want ViewTags", m2.activeView)
 	}
 	if cmd == nil {
-		t.Error("key 6 should return cmdBuildTagIndex")
+		t.Error("key 4 should return cmdBuildTagIndex")
 	}
 }
 
@@ -858,6 +873,7 @@ func TestEditorReturnErrorSetsStatus(t *testing.T) {
 
 func TestEnterNoDocSelected(t *testing.T) {
 	m := newTestModel()
+	m.activeView = ViewJournal
 	m = sendMsg(m, docsLoadedMsg{docs: []search.Result{}})
 	m.cfg.Editor = "vi"
 	m = sendKey(m, "enter")
@@ -868,6 +884,11 @@ func TestEnterNoDocSelected(t *testing.T) {
 
 func TestEnterNoEditorConfigured(t *testing.T) {
 	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	// Expand March 2026 (matches fakeDocs), put cursor on first file row.
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 1 // first file entry after folder header
 	m.cfg.Editor = ""
 	t.Setenv("EDITOR", "")
 	m = sendKey(m, "enter")
@@ -878,6 +899,10 @@ func TestEnterNoEditorConfigured(t *testing.T) {
 
 func TestEnterWithDocReturnsCmd(t *testing.T) {
 	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 1 // first file entry
 	m.cfg.Editor = "vi"
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
@@ -908,24 +933,6 @@ func TestScratchReadyMsgNoEditor(t *testing.T) {
 	}
 }
 
-func TestLazygitDisabled(t *testing.T) {
-	m := newTestModel()
-	m.cfg.Git.Lazygit = false
-	m = sendKey(m, "ctrl+g")
-	if !strings.Contains(m.statusMsg, "disabled") {
-		t.Errorf("ctrl+g lazygit disabled: statusMsg = %q, want 'disabled'", m.statusMsg)
-	}
-}
-
-func TestLazygitEnabledReturnsCmd(t *testing.T) {
-	m := newTestModel()
-	m.cfg.Git.Lazygit = true
-	m.cfg.BaseDir = "/notes"
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
-	if cmd == nil {
-		t.Error("ctrl+g with lazygit enabled should return a tea.Cmd")
-	}
-}
 
 // --- Phase 5 tests ---
 
@@ -1038,56 +1045,22 @@ func TestPinKeyNoDocSelected(t *testing.T) {
 	}
 }
 
-func TestSmartFilterCycles(t *testing.T) {
-	m := newTestModel()
-	if m.smartFilter != SmartFilterNone {
-		t.Fatal("smartFilter should start at None")
+func TestCycleView(t *testing.T) {
+	tests := []struct {
+		start View
+		delta int
+		want  View
+	}{
+		{ViewDashboard, 1, ViewJournal},
+		{ViewTags, 1, ViewDashboard}, // wraps
+		{ViewDashboard, -1, ViewTags}, // wraps backward
+		{ViewJournal, -1, ViewDashboard},
 	}
-	m = sendKey(m, "f")
-	if m.smartFilter != SmartFilterUntagged {
-		t.Errorf("after f: smartFilter = %v, want Untagged", m.smartFilter)
-	}
-	m = sendKey(m, "f")
-	if m.smartFilter != SmartFilterStaleWeek {
-		t.Errorf("after ff: smartFilter = %v, want StaleWeek", m.smartFilter)
-	}
-	m = sendKey(m, "f")
-	if m.smartFilter != SmartFilterInbox {
-		t.Errorf("after fff: smartFilter = %v, want Inbox", m.smartFilter)
-	}
-	m = sendKey(m, "f")
-	if m.smartFilter != SmartFilterNone {
-		t.Errorf("after ffff: smartFilter = %v, want None (wrapped)", m.smartFilter)
-	}
-}
-
-func TestSmartFilterUntagged(t *testing.T) {
-	tagged := search.Result{
-		Path: "/notes/tagged.md",
-		Frontmatter: document.Frontmatter{Tags: []string{"go"}},
-	}
-	untagged := search.Result{
-		Path: "/notes/untagged.md",
-		Frontmatter: document.Frontmatter{Tags: nil},
-	}
-	docs := []search.Result{tagged, untagged}
-	result := applySmartFilter(docs, SmartFilterUntagged)
-	if len(result) != 1 {
-		t.Errorf("SmartFilterUntagged: got %d docs, want 1", len(result))
-	}
-	if result[0].Path != untagged.Path {
-		t.Errorf("SmartFilterUntagged: got %q, want %q", result[0].Path, untagged.Path)
-	}
-}
-
-func TestSmartFilterInbox(t *testing.T) {
-	docs := []search.Result{
-		{Path: "/a.md", Frontmatter: document.Frontmatter{Type: "unsorted"}},
-		{Path: "/b.md", Frontmatter: document.Frontmatter{Type: "kb"}},
-	}
-	result := applySmartFilter(docs, SmartFilterInbox)
-	if len(result) != 1 {
-		t.Errorf("SmartFilterInbox: got %d docs, want 1", len(result))
+	for _, tt := range tests {
+		got := cycleView(tt.start, tt.delta)
+		if got != tt.want {
+			t.Errorf("cycleView(%v, %d) = %v, want %v", tt.start, tt.delta, got, tt.want)
+		}
 	}
 }
 
@@ -1176,27 +1149,6 @@ func TestSpinnerStopsWhenNotLoading(t *testing.T) {
 	}
 }
 
-func TestSmartFilterStringNone(t *testing.T) {
-	if SmartFilterNone.String() != "" {
-		t.Errorf("SmartFilterNone.String() = %q, want empty", SmartFilterNone.String())
-	}
-}
-
-func TestSmartFilterStrings(t *testing.T) {
-	tests := []struct {
-		f    SmartFilter
-		want string
-	}{
-		{SmartFilterUntagged, "filter: untagged"},
-		{SmartFilterStaleWeek, "filter: stale (>7 days)"},
-		{SmartFilterInbox, "filter: inbox"},
-	}
-	for _, tt := range tests {
-		if got := tt.f.String(); got != tt.want {
-			t.Errorf("SmartFilter(%d).String() = %q, want %q", tt.f, got, tt.want)
-		}
-	}
-}
 
 func TestNewModelHasThemeAndIcons(t *testing.T) {
 	m := New(config.Config{Theme: "nord"})
@@ -1230,11 +1182,12 @@ func TestDeleteModeStringIs(t *testing.T) {
 	}
 }
 
-// TestViewShowsFileNames verifies that file names appear in the file panel.
+// TestViewShowsFileNames verifies that file names appear in the Journal file panel.
 func TestViewShowsFileNames(t *testing.T) {
 	m := modelWithDocs()
 	m.width = 80
 	m.height = 24
+	m.activeView = ViewJournal
 	view := stripANSI(m.View())
 	if !strings.Contains(view, "2026-03-14.md") {
 		t.Errorf("view should contain filename '2026-03-14.md':\n%s", view)
@@ -1372,25 +1325,342 @@ func TestKBTemplateNoBuiltinVarsPrompted(t *testing.T) {
 	}
 }
 
-func TestSmartFilterStaleWeek(t *testing.T) {
-	stale := search.Result{
-		Path: "/notes/stale.md",
-		Frontmatter: document.Frontmatter{
-			Modified: time.Now().AddDate(0, 0, -10),
+
+// --- WU4: Footer breakdown tests ---
+
+func TestDocCounts(t *testing.T) {
+	docs := []search.Result{
+		{Frontmatter: document.Frontmatter{Type: "journal"}},
+		{Frontmatter: document.Frontmatter{Type: "journal"}},
+		{Frontmatter: document.Frontmatter{Type: "kb"}},
+		{Frontmatter: document.Frontmatter{Type: "kb_summary"}},
+		{Frontmatter: document.Frontmatter{Type: "KB_DOMAIN"}},
+		{Frontmatter: document.Frontmatter{Type: "scratch"}},
+		{Frontmatter: document.Frontmatter{Type: "unsorted"}},
+	}
+	j, k, s := docCounts(docs)
+	if j != 2 {
+		t.Errorf("journal count = %d, want 2", j)
+	}
+	if k != 3 {
+		t.Errorf("kb count = %d, want 3 (kb + kb_summary + KB_DOMAIN)", k)
+	}
+	if s != 1 {
+		t.Errorf("scratch count = %d, want 1", s)
+	}
+}
+
+func TestHighlightedRelPathEmpty(t *testing.T) {
+	m := newTestModel()
+	// No baseDir, no docs selected — should return empty.
+	if got := highlightedRelPath(m); got != "" {
+		t.Errorf("highlightedRelPath() = %q, want empty", got)
+	}
+}
+
+func TestStatusBarContainsBreakdown(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 120
+	m.height = 24
+	m.loading = false
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "journal") {
+		t.Errorf("status bar missing 'journal': %q", view)
+	}
+	if !strings.Contains(view, "kb") {
+		t.Errorf("status bar missing 'kb': %q", view)
+	}
+}
+
+// --- WU2: Tab bar tests ---
+
+func TestTabBarContainsAllPanes(t *testing.T) {
+	m := newTestModel()
+	m.width = 80
+	tab := stripANSI(m.renderTabBar())
+	for _, label := range []string{"Dashboard", "Journal", "KB", "Tag Browser"} {
+		if !strings.Contains(tab, label) {
+			t.Errorf("tab bar missing pane label %q: %q", label, tab)
+		}
+	}
+}
+
+func TestTabBarActivePane(t *testing.T) {
+	views := []struct {
+		view  View
+		label string
+	}{
+		{ViewDashboard, "Dashboard"},
+		{ViewJournal, "Journal"},
+		{ViewKB, "KB"},
+		{ViewTags, "Tag Browser"},
+	}
+	for _, tt := range views {
+		m := newTestModel()
+		m.width = 80
+		m.activeView = tt.view
+		tab := m.renderTabBar()
+		// Active tab is rendered by TabActive style (Reverse). Check that
+		// the raw rendered string still contains the label.
+		if !strings.Contains(stripANSI(tab), tt.label) {
+			t.Errorf("activeView=%v: tab bar missing active label %q", tt.view, tt.label)
+		}
+	}
+}
+
+func TestContentHeightIs3Less(t *testing.T) {
+	m := newTestModel()
+	m.height = 30
+	if got := m.contentHeight(); got != 27 {
+		t.Errorf("contentHeight() = %d, want 27 (height-3)", got)
+	}
+}
+
+// --- WU9: Tag Browser refinement tests ---
+
+func TestTagDocCursorResetOnTagChange(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewTags
+	m.activePanel = PanelFiles
+	m.tagEntries = buildTagIndex(m.docs)
+	if len(m.tagEntries) == 0 {
+		t.Skip("no tags in test docs")
+	}
+	// Move to non-zero tagDocCursor first.
+	m.tagDocCursor = 1
+	m.tagCursor = 0
+
+	// Press j to move tagCursor → tagDocCursor should reset.
+	m = sendKey(m, "j")
+	if m.tagDocCursor != 0 {
+		t.Errorf("tagDocCursor = %d after tag change, want 0", m.tagDocCursor)
+	}
+}
+
+func TestTagDocCursorNavigation(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewTags
+	m.activePanel = PanelPreview
+	m.tagEntries = buildTagIndex(m.docs)
+	if len(m.tagEntries) == 0 {
+		t.Skip("no tags in test docs")
+	}
+	m.tagCursor = 0
+	tagged := m.taggedDocs()
+	if len(tagged) < 2 {
+		t.Skip("need at least 2 docs for selected tag")
+	}
+
+	// j moves tagDocCursor down.
+	m = sendKey(m, "j")
+	if m.tagDocCursor != 1 {
+		t.Errorf("tagDocCursor = %d after j, want 1", m.tagDocCursor)
+	}
+
+	// k moves back up.
+	m = sendKey(m, "k")
+	if m.tagDocCursor != 0 {
+		t.Errorf("tagDocCursor = %d after k, want 0", m.tagDocCursor)
+	}
+
+	// k at top clamps at 0.
+	m = sendKey(m, "k")
+	if m.tagDocCursor != 0 {
+		t.Errorf("tagDocCursor = %d after k at top, want 0", m.tagDocCursor)
+	}
+}
+
+func TestTagDocPanelHighlight(t *testing.T) {
+	m := modelWithDocs()
+	m.width = 80
+	m.height = 24
+	m.activeView = ViewTags
+	m.activePanel = PanelPreview
+	m.tagEntries = buildTagIndex(m.docs)
+	if len(m.tagEntries) == 0 {
+		t.Skip("no tags in test docs")
+	}
+	m.tagCursor = 0
+	tagged := m.taggedDocs()
+	if len(tagged) < 2 {
+		t.Skip("need at least 2 docs for selected tag")
+	}
+	m.tagDocCursor = 1
+
+	panelWidth := m.width - (m.width / 3) - 1
+	rendered := m.renderTagDocPanel(panelWidth, m.contentHeight())
+	lines := strings.Split(stripANSI(rendered), "\n")
+	// line 0 is header, line 1 is first doc, line 2 is cursor doc (index 1)
+	if len(lines) < 3 {
+		t.Fatalf("too few lines in tag doc panel: %d", len(lines))
+	}
+	// The highlighted line (tagDocCursor=1) should contain the second doc's title.
+	want := tagged[1].Frontmatter.Title
+	if !strings.Contains(lines[2], want) {
+		t.Errorf("highlighted line %q does not contain title %q", lines[2], want)
+	}
+}
+
+// --- WU6: Dashboard tests ---
+
+func TestBuildDashItems(t *testing.T) {
+	m := modelWithDocs()
+	items := buildDashItems(m)
+
+	// Must have section headers.
+	headers := 0
+	for _, it := range items {
+		if it.isHeader {
+			headers++
+		}
+	}
+	if headers < 2 {
+		t.Errorf("buildDashItems: expected at least 2 headers, got %d", headers)
+	}
+
+	// No duplicate paths among file items.
+	seen := map[string]bool{}
+	for _, it := range items {
+		if it.isHeader {
+			continue
+		}
+		if seen[it.doc.Path] {
+			t.Errorf("buildDashItems: duplicate path %q", it.doc.Path)
+		}
+		seen[it.doc.Path] = true
+	}
+}
+
+func TestDashCursorSkipsHeaders(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewDashboard
+	m.dashRight = false
+	m.dashCursor = 0
+
+	items := buildDashItems(m)
+	// Find first header index.
+	firstHeader := -1
+	for i, it := range items {
+		if it.isHeader {
+			firstHeader = i
+			break
+		}
+	}
+	if firstHeader == -1 {
+		t.Skip("no headers in dash items")
+	}
+	m.dashCursor = firstHeader // start on a header
+
+	// j should move past it to a file item.
+	m = sendKey(m, "j")
+	if m.dashCursor <= firstHeader {
+		t.Errorf("dashCursor = %d after j from header, expected to skip past %d", m.dashCursor, firstHeader)
+	}
+	if items[m.dashCursor].isHeader {
+		t.Errorf("dashCursor landed on another header at %d", m.dashCursor)
+	}
+}
+
+func TestDashRightToggle(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewDashboard
+	m.dashRight = false
+
+	m = sendKey(m, "l")
+	if !m.dashRight {
+		t.Error("dashRight should be true after l")
+	}
+
+	m = sendKey(m, "h")
+	if m.dashRight {
+		t.Error("dashRight should be false after h")
+	}
+}
+
+// --- WU5: Read mode tests ---
+
+func TestStripFrontmatter(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "no frontmatter",
+			input: "# Hello\nWorld",
+			want:  "# Hello\nWorld",
+		},
+		{
+			name:  "valid frontmatter",
+			input: "---\ntype: journal\ntitle: Test\n---\n# Body\nContent",
+			want:  "# Body\nContent",
+		},
+		{
+			name:  "frontmatter only",
+			input: "---\ntype: journal\n---\n",
+			want:  "",
+		},
+		{
+			name:  "nested --- in body preserved",
+			input: "---\ntype: kb\n---\n# Title\n---\nSeparator",
+			want:  "# Title\n---\nSeparator",
 		},
 	}
-	recent := search.Result{
-		Path: "/notes/recent.md",
-		Frontmatter: document.Frontmatter{
-			Modified: time.Now().AddDate(0, 0, -3),
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripFrontmatter(tt.input)
+			if got != tt.want {
+				t.Errorf("stripFrontmatter() = %q, want %q", got, tt.want)
+			}
+		})
 	}
-	result := applySmartFilter([]search.Result{stale, recent}, SmartFilterStaleWeek)
-	if len(result) != 1 {
-		t.Fatalf("SmartFilterStaleWeek: got %d results, want 1", len(result))
+}
+
+func TestModeReadEntryAndExit(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	// Expand the month that matches fakeDocs (2026-03).
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	// Position cursor on first file row (index 1, after the folder).
+	m.journalCursor = 1
+
+	if m.journalSelectedPath() == "" {
+		t.Fatal("expected journal doc selected at cursor 1")
 	}
-	if result[0].Path != stale.Path {
-		t.Errorf("SmartFilterStaleWeek: got %q, want %q", result[0].Path, stale.Path)
+
+	savedView := m.activeView
+	savedPanel := m.activePanel
+
+	m = sendKey(m, "o")
+	if m.mode != ModeRead {
+		t.Errorf("mode = %v after o, want ModeRead", m.mode)
+	}
+
+	// Exit with q.
+	m = sendKey(m, "q")
+	if m.mode != ModeNormal {
+		t.Errorf("mode = %v after q, want ModeNormal", m.mode)
+	}
+	if m.activeView != savedView {
+		t.Errorf("activeView = %v after q, want %v", m.activeView, savedView)
+	}
+	if m.activePanel != savedPanel {
+		t.Errorf("activePanel = %v after q, want %v", m.activePanel, savedPanel)
+	}
+}
+
+func TestModeReadEscRestores(t *testing.T) {
+	m := modelWithDocs()
+	m.activeView = ViewJournal
+	m.activePanel = PanelFiles
+	m.journalExpanded = map[string]bool{"2026-03": true}
+	m.journalCursor = 1
+
+	m = sendKey(m, "o")
+	m = sendKey(m, "esc")
+	if m.mode != ModeNormal {
+		t.Errorf("mode = %v after esc, want ModeNormal", m.mode)
 	}
 }
 

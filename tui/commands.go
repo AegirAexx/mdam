@@ -147,15 +147,6 @@ func cmdOpenEditor(path, editor string) tea.Cmd {
 	})
 }
 
-// cmdOpenLazygit suspends the TUI and opens lazygit rooted at dir.
-// Sends editorReturnMsg when lazygit exits.
-func cmdOpenLazygit(dir string) tea.Cmd {
-	c := exec.Command("lazygit", "-p", dir)
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return editorReturnMsg{err: err}
-	})
-}
-
 // cmdEnsureAndOpenScratch creates the scratch pad document if it does not exist,
 // then sends scratchReadyMsg with the path so the caller can open it in the editor.
 func cmdEnsureAndOpenScratch(cfg config.Config) tea.Cmd {
@@ -207,6 +198,36 @@ func cmdSavePins(pinsPath string, pins map[string]bool) tea.Cmd {
 	return func() tea.Msg {
 		_ = savePins(pinsPath, pins) // errors silently dropped — pins are best-effort
 		return nil
+	}
+}
+
+// stripFrontmatter removes the leading YAML frontmatter block (---…---) from
+// content. If no frontmatter is present, the original content is returned.
+func stripFrontmatter(content string) string {
+	if !strings.HasPrefix(content, "---\n") {
+		return content
+	}
+	rest := content[4:] // skip the opening "---\n"
+	idx := strings.Index(rest, "\n---\n")
+	if idx == -1 {
+		return content
+	}
+	return strings.TrimSpace(rest[idx+5:]) // skip "\n---\n"
+}
+
+// cmdLoadRead reads path, strips frontmatter, renders with glamour, and sends readReadyMsg.
+func cmdLoadRead(path, glamourStyle string, width int) tea.Cmd {
+	return func() tea.Msg {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return readReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
+		}
+		stripped := stripFrontmatter(string(content))
+		rendered, err := glamour.Render(stripped, glamourStyle)
+		if err != nil {
+			return readReadyMsg{content: stripped}
+		}
+		return readReadyMsg{content: rendered}
 	}
 }
 

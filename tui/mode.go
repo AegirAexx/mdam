@@ -17,6 +17,8 @@ const (
 	ModeTemplateVars
 	// ModeDeleteConfirm prompts the user to confirm a document deletion.
 	ModeDeleteConfirm
+	// ModeRead is a full-screen glamour read overlay, triggered by "o".
+	ModeRead
 )
 
 func (m Mode) String() string {
@@ -31,31 +33,35 @@ func (m Mode) String() string {
 		return "NEW DOC"
 	case ModeDeleteConfirm:
 		return "DELETE?"
+	case ModeRead:
+		return "READ"
 	default:
 		return "UNKNOWN"
 	}
 }
 
-// View identifies which document set is currently displayed in the files panel.
+// View identifies which pane is currently active.
 type View int
 
 const (
-	ViewAll       View = iota // all documents (default, startup state)
-	ViewJournal               // journal entries only
-	ViewKB                    // knowledge base only
-	ViewTodo                  // focus TODO panel
-	ViewRecent                // top 20 by modified date
-	ViewDashboard             // today's context dashboard (key 1)
-	ViewTags                  // tag browser (key 6)
+	ViewDashboard View = iota // key 1, startup default
+	ViewJournal               // key 2
+	ViewKB                    // key 3
+	ViewTags                  // key 4
 )
+
+// cycleView advances the active view by delta (1 or -1), wrapping around.
+func cycleView(v View, delta int) View {
+	const n = 4 // total number of named views
+	return View((int(v) + delta + n) % n)
+}
 
 // PanelID identifies which panel currently has focus.
 type PanelID int
 
 const (
-	PanelFiles PanelID = iota
+	PanelFiles   PanelID = iota
 	PanelPreview
-	PanelTodo
 	panelCount // sentinel — total number of panels
 )
 
@@ -65,8 +71,6 @@ func (p PanelID) String() string {
 		return "Files"
 	case PanelPreview:
 		return "Preview"
-	case PanelTodo:
-		return "TODOs"
 	default:
 		return "?"
 	}
@@ -80,27 +84,4 @@ func (p PanelID) next() PanelID {
 // prev returns the previous panel in cycle order.
 func (p PanelID) prev() PanelID {
 	return (p + panelCount - 1) % panelCount
-}
-
-// SmartFilter is a post-filter applied over ViewAll documents.
-type SmartFilter int
-
-const (
-	SmartFilterNone     SmartFilter = iota // no filter — show all
-	SmartFilterUntagged                    // documents with no tags
-	SmartFilterStaleWeek                   // documents not modified in >7 days
-	SmartFilterInbox                       // type: unsorted (inbox items)
-)
-
-func (f SmartFilter) String() string {
-	switch f {
-	case SmartFilterUntagged:
-		return "filter: untagged"
-	case SmartFilterStaleWeek:
-		return "filter: stale (>7 days)"
-	case SmartFilterInbox:
-		return "filter: inbox"
-	default:
-		return ""
-	}
 }

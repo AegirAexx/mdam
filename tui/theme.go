@@ -40,12 +40,16 @@ type Theme struct {
 	TodoOpen   lipgloss.Style
 	TodoDone   lipgloss.Style
 
-	// Smart filter bar
+	// FilterBar is reserved for future use.
 	FilterBar lipgloss.Style
 
 	// Dashboard
 	DashboardHeader lipgloss.Style
 	DashboardItem   lipgloss.Style
+
+	// Tab bar
+	TabActive   lipgloss.Style // active pane tab — inverted colors
+	TabInactive lipgloss.Style // inactive pane tab — muted text
 
 	// GlamourStyle is the name passed to glamour.Render.
 	GlamourStyle string
@@ -109,6 +113,8 @@ func tokyonightTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(comment)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
+		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
 		GlamourStyle:    "dark",
 	}
 }
@@ -152,6 +158,8 @@ func nordTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
+		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
 		GlamourStyle:    "notty",
 	}
 }
@@ -195,6 +203,8 @@ func gruvboxTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(yellow)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(yellow)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
+		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
 		GlamourStyle:    "dark",
 	}
 }
@@ -238,6 +248,8 @@ func catppuccinTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
+		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
 		GlamourStyle:    "dark",
 	}
 }
@@ -282,6 +294,8 @@ func draculaTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(purple)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
+		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
 		GlamourStyle:    "dark",
 	}
 }

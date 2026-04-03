@@ -30,14 +30,16 @@ mdam/
 │   ├── export/        # Frontmatter stripping for sharing
 │   └── git/           # Git status detection (shells out to git)
 ├── tui/               # BubbleTea TUI
-│   ├── mode.go           # Mode, PanelID, View types and String() methods
+│   ├── mode.go           # Mode, PanelID, View types and constants
 │   ├── keys.go           # KeyMap and DefaultKeyMap()
 │   ├── messages.go       # Async message types for engine responses
 │   ├── commands.go       # tea.Cmd factories wrapping engine calls
 │   ├── model.go          # Model struct, Init/Update, all mode handlers
-│   ├── view.go           # View(), panel rendering, status bar
-│   ├── view_dashboard.go # Dashboard view (key 1)
-│   ├── view_tags.go      # Tag browser view (key 6)
+│   ├── view.go           # View(), tab bar, file/preview panels, status bar
+│   ├── view_dashboard.go # Dashboard pane (key 1)
+│   ├── view_journal.go   # Journal tree pane (key 2)
+│   ├── view_kb.go        # KB subtype tree pane (key 3)
+│   ├── view_tags.go      # Tag browser pane (key 4)
 │   ├── theme.go          # Theme struct, NewTheme(), 5 palettes
 │   ├── icons.go          # Icons struct, DefaultIcons(), PlainIcons()
 │   ├── pins.go           # loadPins / savePins / togglePin
@@ -45,23 +47,20 @@ mdam/
 │   └── tui.go            # Run(cfg) entry point
 └── docs/
     ├── KEYBINDINGS.md    # TUI keybinding reference
-    ├── HANDOFF.md        # Complete project state for future sessions
+    ├── HANDOFF.md        # Current project state for session continuity
     ├── FRONTMATTER.md    # Frontmatter contract and field reference
     ├── TODO-FORMAT.md    # TODO task syntax and sweep/archive behaviour
     ├── CLI.md            # Full CLI subcommand reference
     ├── DEVELOPMENT.md    # This file
     ├── issues/           # Bug reports and feature requests
-    ├── reports/
-    │   ├── kick-off/     # Phase implementation reports (1–5)
-    │   └── issues/       # Per-issue fix reports
-    └── specs/
-        └── mdam-spec-v1.md  # Full project specification
+    ├── specs/            # Feature specifications
+    └── reports/          # Session and issue reports
 ```
 
 ## Code style
 
-- **Standard library first.** Only use external packages already in `go.mod`. Do not add new dependencies without explicit approval.
-- **Functions are small and pure.** Prefer functions that take inputs and return outputs over methods with side effects. Keep functions under 50 lines.
+- **Standard library first.** Only use external packages already in `go.mod`. No new dependencies without explicit approval.
+- **Functions are small and pure.** Prefer inputs → outputs over methods with side effects. Keep functions under 50 lines.
 - **Error handling.** Return errors, don't panic. Wrap with context: `fmt.Errorf("doing thing: %w", err)`.
 - **Naming.** Follow Go conventions: `MixedCaps`, not `snake_case`. Packages are lowercase single words.
 - **File paths.** Always use `filepath.Join()`, never string concatenation.
@@ -82,4 +81,4 @@ mdam/
 | `github.com/charmbracelet/bubbletea` | TUI event loop |
 | `github.com/charmbracelet/lipgloss` | TUI styling and theming |
 | `github.com/charmbracelet/bubbles` | TUI components (textinput, viewport) |
-| `github.com/charmbracelet/glamour` | Markdown rendering for preview panel |
+| `github.com/charmbracelet/glamour` | Markdown rendering for preview and read mode |
