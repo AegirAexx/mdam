@@ -60,5 +60,6 @@ modified: 2026-03-15
 
 ## Session Continuity
 
-`docs/HANDOFF.md` is the current project state for the next session.
-Read it at the start. Rewrite it at the end — current state only, no history.
+Read `docs/HANDOFF.md` at the start of every session.
+Rewrite it at the end of every session — current state only, no history.
+Never append. Always replace.
