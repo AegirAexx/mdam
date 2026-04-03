@@ -10,8 +10,56 @@ import (
 	"github.com/AegirAexx/mdam/internal/git"
 )
 
+// contentHeight returns the number of terminal rows available for pane content,
+// accounting for the tab bar (1 line), the separator (1 line), and the status bar (1 line).
+func (m Model) contentHeight() int {
+	h := m.height - 3
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// renderTabBar renders a one-line tab bar showing all 4 panes.
+// The active pane tab is rendered with inverted colors.
+func (m Model) renderTabBar() string {
+	type tabDef struct {
+		view  View
+		label string
+	}
+	tabs := []tabDef{
+		{ViewDashboard, "Dashboard"},
+		{ViewJournal, "Journal"},
+		{ViewKB, "KB"},
+		{ViewTags, "Tag Browser"},
+	}
+
+	var parts []string
+	for _, t := range tabs {
+		if m.activeView == t.view {
+			parts = append(parts, m.theme.TabActive.Render(t.label))
+		} else {
+			parts = append(parts, m.theme.TabInactive.Render(t.label))
+		}
+	}
+	line := strings.Join(parts, " ")
+	return lipgloss.NewStyle().Width(m.width).Render(line)
+}
+
+// renderReadMode renders the full-screen glamour read overlay.
+func (m Model) renderReadMode() string {
+	var b strings.Builder
+	b.WriteString(m.readViewport.View())
+	b.WriteString("\n")
+	b.WriteString(lipgloss.NewStyle().Faint(true).Render("  q / Esc  close"))
+	return b.String()
+}
+
 // View renders the current model state to a string.
 func (m Model) View() string {
+	if m.mode == ModeRead {
+		return m.renderReadMode()
+	}
 	if m.showHelp {
 		return m.viewHelp()
 	}
@@ -24,17 +72,22 @@ func (m Model) View() string {
 	if m.activeView == ViewDashboard {
 		return m.renderDashboard()
 	}
+	if m.activeView == ViewJournal {
+		return m.renderTabBar() + "\n" + m.renderJournalView()
+	}
+	if m.activeView == ViewKB {
+		return m.renderTabBar() + "\n" + m.renderKBView()
+	}
 	if m.activeView == ViewTags {
 		return m.renderTagBrowser()
 	}
 
 	var b strings.Builder
 
-	// Available height for content (minus status bar and separator line).
-	contentHeight := m.height - 2
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
+	b.WriteString(m.renderTabBar())
+	b.WriteString("\n")
+
+	contentHeight := m.contentHeight()
 
 	// Split content area: left panel (~33%) | right panel (~67%).
 	leftWidth := m.width / 3
@@ -90,12 +143,6 @@ func (m Model) renderFilePanel(width, height int) string {
 		return strings.Join(lines, "\n")
 	}
 
-	// Smart filter indicator bar (ViewAll only).
-	if m.activeView == ViewAll && m.smartFilter != SmartFilterNone {
-		bar := m.theme.FilterBar.Render(" " + m.icons.Filter + " " + m.smartFilter.String() + " ")
-		lines = append(lines, truncate(bar, width-1))
-	}
-
 	if len(docs) == 0 {
 		lines = append(lines, "  (no documents)")
 		return strings.Join(lines, "\n")
@@ -114,50 +161,34 @@ func (m Model) renderFilePanel(width, height int) string {
 		doc := docs[i]
 		selected := i == m.fileCursor
 
-		// Cursor prefix
-		var cursorStr string
-		if selected && focused {
-			cursorStr = m.theme.FileCursor.Render(m.icons.CursorSel)
-		} else if selected {
-			cursorStr = m.icons.CursorInactive
-		} else {
-			cursorStr = "  "
-		}
-
-		// Pin marker
+		// Build the name and markers.
+		name := filepath.Base(doc.Path)
 		pinMarker := ""
 		if m.pinnedPaths[doc.Path] {
-			pinMarker = m.theme.FilePinned.Render(m.icons.Pinned)
+			pinMarker = " " + m.icons.Pinned
+		}
+		gitMarker := ""
+		if g := m.gitMarkerStyled(doc.Path); g != "" {
+			gitMarker = " " + g
 		}
 
-		// Git marker
-		gitMarker := m.gitMarkerStyled(doc.Path)
-
-		name := filepath.Base(doc.Path)
-		// Estimate available name width (subtract cursor + pin + git + spaces).
-		markerLen := lipgloss.Width(gitMarker) + lipgloss.Width(pinMarker)
-		nameWidth := width - lipgloss.Width(cursorStr) - markerLen - 1
+		nameWidth := width - 2 - len(pinMarker) - lipgloss.Width(gitMarker)
 		if nameWidth < 1 {
 			nameWidth = 1
 		}
 
-		var nameStr string
-		if selected && focused {
-			nameStr = m.theme.FileSelected.Render(truncate(name, nameWidth))
-		} else if m.pinnedPaths[doc.Path] {
-			nameStr = m.theme.FilePinned.Render(truncate(name, nameWidth))
-		} else {
-			nameStr = m.theme.FileNormal.Render(truncate(name, nameWidth))
-		}
+		itemText := " " + truncate(name, nameWidth) + pinMarker + gitMarker
 
-		line := cursorStr + nameStr
-		if pinMarker != "" {
-			line += " " + pinMarker
+		var line string
+		if selected && focused {
+			// Full-row inverted highlight (§2 focus indicator).
+			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+		} else if m.pinnedPaths[doc.Path] {
+			line = m.theme.FilePinned.Render(itemText)
+		} else {
+			line = m.theme.FileNormal.Render(itemText)
 		}
-		if gitMarker != "" {
-			line += " " + gitMarker
-		}
-		lines = append(lines, strings.TrimRight(line, " "))
+		lines = append(lines, line)
 	}
 
 	return strings.Join(lines, "\n")
@@ -172,16 +203,7 @@ func (m Model) renderPreviewPanel(width, height int) string {
 	lines = append(lines, title)
 
 	docs := m.visibleDocs()
-
-	// Calculate space for viewport vs TODO panel.
-	todoHeight := len(m.todos) + 3 // header + items + empty-msg
-	if len(m.todos) == 0 {
-		todoHeight = 3
-	}
-	if todoHeight > height/3 {
-		todoHeight = height / 3
-	}
-	viewportAvail := height - 1 - todoHeight // minus panel header
+	viewportAvail := height - 1 // minus panel header
 	if viewportAvail < 2 {
 		viewportAvail = 2
 	}
@@ -216,30 +238,6 @@ func (m Model) renderPreviewPanel(width, height int) string {
 			lines = append(lines, "")
 			lines = append(lines, m.theme.PreviewMeta.Render(truncate("  "+filepath.Base(r.Path), width-1)))
 		}
-	}
-
-	// TODO mini-panel at bottom of right side.
-	todoStart := height - todoHeight
-	if todoStart < len(lines)+1 {
-		todoStart = len(lines) + 1
-	}
-	for len(lines) < todoStart {
-		lines = append(lines, "")
-	}
-
-	todoFocused := m.activePanel == PanelTodo
-	lines = append(lines, styledPanelHeader("TODOs", todoFocused, width, m.theme, m.icons))
-	for i, task := range m.todos {
-		cursor := "  "
-		if i == m.todoCursor && todoFocused {
-			cursor = m.theme.FileCursor.Render(m.icons.CursorSel)
-		}
-		if len(lines) < height-1 {
-			lines = append(lines, cursor+m.theme.TodoOpen.Render(truncate(task.Raw, width-3)))
-		}
-	}
-	if len(m.todos) == 0 && len(lines) < height-1 {
-		lines = append(lines, m.theme.PreviewMeta.Render("  (no open tasks)"))
 	}
 
 	return strings.Join(lines, "\n")
@@ -282,7 +280,15 @@ func (m Model) renderStatusBar() string {
 		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
 		left += m.theme.StatusInfo.Render("│ " + frame + " scanning… ")
 	} else {
-		left += m.theme.StatusInfo.Render(fmt.Sprintf("│ %d docs ", len(m.docs)))
+		j, k, s := docCounts(m.docs)
+		left += m.theme.StatusInfo.Render(fmt.Sprintf("│ %d journal · %d kb · %d scratch ", j, k, s))
+	}
+
+	// File path of highlighted document (centre section).
+	if !m.loading {
+		if rel := highlightedRelPath(m); rel != "" {
+			left += m.theme.StatusInfo.Render("│ " + truncate(rel, 40) + " ")
+		}
 	}
 
 	// Right side: mode input or status/hint.
@@ -296,7 +302,7 @@ func (m Model) renderStatusBar() string {
 		if m.statusMsg != "" {
 			right = m.theme.StatusMsg.Render(m.statusMsg)
 		} else {
-			right = m.theme.StatusHint.Render("/search  :cmd  f:filter  ?help  q:quit")
+			right = m.theme.StatusHint.Render("/search  :cmd  o:read  ?help  q:quit")
 		}
 	}
 
@@ -374,8 +380,7 @@ func (m Model) viewHelp() string {
 	b.WriteString("\n")
 	b.WriteString(k.Render("    j / k       ") + n.Render("move down / up") + "\n")
 	b.WriteString(k.Render("    h / l       ") + n.Render("prev / next panel") + "\n")
-	b.WriteString(k.Render("    gg / G      ") + n.Render("top / bottom") + "\n")
-	b.WriteString(k.Render("    Tab         ") + n.Render("cycle panel focus") + "\n\n")
+	b.WriteString(k.Render("    gg / G      ") + n.Render("top / bottom") + "\n\n")
 
 	b.WriteString(h.Render("  Modes"))
 	b.WriteString("\n")
@@ -383,25 +388,24 @@ func (m Model) viewHelp() string {
 	b.WriteString(k.Render("    :           ") + n.Render("command") + "\n")
 	b.WriteString(k.Render("    Esc         ") + n.Render("cancel / return to normal") + "\n\n")
 
-	b.WriteString(h.Render("  Views"))
+	b.WriteString(h.Render("  Panes"))
 	b.WriteString("\n")
 	b.WriteString(k.Render("    1           ") + n.Render("dashboard") + "\n")
 	b.WriteString(k.Render("    2           ") + n.Render("journal") + "\n")
 	b.WriteString(k.Render("    3           ") + n.Render("knowledge base") + "\n")
-	b.WriteString(k.Render("    4           ") + n.Render("todos") + "\n")
-	b.WriteString(k.Render("    5           ") + n.Render("recent") + "\n")
-	b.WriteString(k.Render("    6           ") + n.Render("tag browser") + "\n\n")
+	b.WriteString(k.Render("    4           ") + n.Render("tag browser") + "\n")
+	b.WriteString(k.Render("    Tab         ") + n.Render("next pane") + "\n")
+	b.WriteString(k.Render("    Shift+Tab   ") + n.Render("prev pane") + "\n\n")
 
 	b.WriteString(h.Render("  Actions"))
 	b.WriteString("\n")
+	b.WriteString(k.Render("    o           ") + n.Render("read document (glamour)") + "\n")
 	b.WriteString(k.Render("    Enter       ") + n.Render("open in $EDITOR") + "\n")
-	b.WriteString(k.Render("    ctrl+g      ") + n.Render("open lazygit") + "\n")
 	b.WriteString(k.Render("    n           ") + n.Render("new document") + "\n")
 	b.WriteString(k.Render("    s           ") + n.Render("scratch pad") + "\n")
 	b.WriteString(k.Render("    e           ") + n.Render("export") + "\n")
 	b.WriteString(k.Render("    p           ") + n.Render("pin / unpin") + "\n")
 	b.WriteString(k.Render("    d           ") + n.Render("delete (with confirmation)") + "\n")
-	b.WriteString(k.Render("    f           ") + n.Render("cycle smart filter") + "\n")
 	b.WriteString(k.Render("    R           ") + n.Render("rescan") + "\n")
 	b.WriteString(k.Render("    q           ") + n.Render("quit") + "\n\n")
 

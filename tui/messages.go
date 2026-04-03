@@ -48,7 +48,7 @@ type fileCreatedMsg struct {
 	err  error
 }
 
-// editorReturnMsg is sent when an external process ($EDITOR or lazygit) exits.
+// editorReturnMsg is sent when an external process ($EDITOR) exits.
 type editorReturnMsg struct {
 	err error
 }
@@ -76,3 +76,8 @@ type tagIndexMsg struct {
 
 // tickMsg is sent by the spinner tick to advance the loading animation frame.
 type tickMsg struct{}
+
+// readReadyMsg is sent when glamour has rendered the full-screen read content.
+type readReadyMsg struct {
+	content string
+}

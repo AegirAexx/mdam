@@ -1,6 +1,64 @@
 # mdam — Project Handoff
 
-mdam (Markdown Admin Management) is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base, TODOs, scratch notes. The project is at v0.1.0 alpha. All five development phases are implemented and all bug fixes (issues #1, #2, #3, #4, #5) have been applied and merged. No systematic testing pass has been run yet — every feature is implemented but none has been individually verified as working correctly.
+mdam (Markdown Admin Management) is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base, TODOs, scratch notes.
+
+**Current branch:** `fix/ui-ux-updates`
+
+---
+
+## Session 02 — COMPLETE
+
+All 9 work units of the mdam-session-02-spec have been implemented and all tests pass (`go test ./... && go vet ./...` both green).
+
+### What was done
+
+| WU | Description | Status |
+|----|-------------|--------|
+| WU1 | Structural cleanup — removed ViewAll/ViewTodo/ViewRecent/PanelTodo/SmartFilter/lazygit; 4 named views (Dashboard/Journal/KB/Tags); Tab/ShiftTab cycle panes | DONE |
+| WU2 | Persistent tab bar + `contentHeight()` helper | DONE |
+| WU3 | Full-row Reverse(true) focus indicator (file panel, tag panel) | DONE |
+| WU4 | Footer doc count breakdown (journal/kb/scratch) + highlighted file path | DONE |
+| WU9 | Tag Browser: `tagDocCursor` for right panel; j/k navigation when PanelPreview active; enter opens tagged doc | DONE |
+| WU7 | Journal tree view: month-folder collapse/expand (one open at a time); auto-expand current month on entry; `journalCursor` navigation; `tui/view_journal.go` | DONE |
+| WU8 | KB subtypes + tree: `kbSubtype()` derives folder labels from type prefix; `filterKBDocs()` uses `HasPrefix("kb")`; `kbCursor` navigation; `tui/view_kb.go` | DONE |
+| WU5 | Glamour read mode: `o` opens full-screen ModeRead overlay; q/Esc closes; `stripFrontmatter()`; `cmdLoadRead()`; scrollable viewport | DONE |
+| WU6 | Dashboard two-column: navigable left (journal/pinned/recent); static right (TODOs); `dashCursor`/`dashRight`; `buildDashItems()` with dedup | DONE |
+
+### New files
+- `tui/view_journal.go` — journalRow, buildJournalRows, renderJournalView, initJournalView
+- `tui/view_kb.go` — kbRow, kbSubtype, filterKBDocs, buildKBRows, renderKBView
+- `tui/view_journal_test.go` — journal tree tests
+- `tui/view_kb_test.go` — KB subtype tests
+
+### Key model fields added
+```
+journalExpanded  map[string]bool
+journalCursor    int
+kbExpanded       map[string]bool
+kbCursor         int
+tagDocCursor     int
+dashCursor       int
+dashRight        bool
+readViewport     viewport.Model
+readReturnView   View
+readReturnPanel  PanelID
+```
+
+---
+
+## Next Session: Start Here
+
+Branch `fix/ui-ux-updates` needs to be reviewed, then merged to master via PR.
+
+After merge, start the systematic testing pass (v0.2.0 gate):
+
+1. Manual smoke test all 4 panes: Dashboard → Journal → KB → Tags
+2. Verify Journal auto-expand with real data; test tree expand/collapse
+3. Verify KB subtype folders with real `kb_*` typed docs
+4. Test Tag Browser left/right panel navigation and tagDocCursor
+5. Test read mode (`o`) on a real doc; verify scrolling; q/Esc closes
+6. Test Dashboard navigation; verify pinned/recent dedup
+7. If all smoke tests pass, consider bumping to v0.1.1
 
 ---
 
@@ -10,34 +68,9 @@ _(none logged — populate as testing reveals problems)_
 
 ---
 
-## Next Session: Start Here
-
-Begin the systematic testing pass. Work through packages in order:
-
-1. `internal/document` — frontmatter parsing, validation, kebab-case
-2. `internal/template` — rendering, variable precedence, `TemplateType()`
-3. `internal/journal` — create, list, date parsing
-4. `internal/todo` — parse, sweep, archive, filter
-5. `internal/search` — fuzzy search, tag/type/date filters
-6. `internal/importer` — validate, auto-fix, duplicate detection
-7. `internal/export` — frontmatter stripping
-8. `internal/setup` — first-run detection, scaffolding, idempotence
-9. `internal/config` — path helpers, Viper loading
-10. `internal/git` — git status detection
-11. `tui/` — keybindings, view switching, modal flows, editor handoff
-
-For each package: read existing tests, identify gaps, add missing table-driven tests, run `go test ./... && go vet ./...`.
-
-Gate for v0.2.0: all packages have meaningful test coverage and `go test ./...` is green.
-
----
-
 ## Deferred (out of scope for v1)
 
 - AI / Agent integration
 - Multi-device conflict resolution
-- Structured TODO format
 - File watchers (`fsnotify`)
-- TODO-specific keybindings
-- `g` vs `ctrl+g` for lazygit
-- Arrow key navigation
+- Arrow key navigation (partially done — down/up keys work)

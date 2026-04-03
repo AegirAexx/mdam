@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -49,8 +48,7 @@ type Model struct {
 	fileCursor int
 
 	// --- TODO state ---
-	todos      []todo.Task
-	todoCursor int
+	todos []todo.Task
 
 	// --- Git state ---
 	gitStatus  git.RepoStatus
@@ -79,12 +77,27 @@ type Model struct {
 	// --- Delete confirmation ---
 	deleteConfirmPath string
 
-	// --- Smart filter ---
-	smartFilter SmartFilter
+	// --- Journal tree ---
+	journalExpanded map[string]bool // month key ("2026-04") → expanded
+	journalCursor   int
+
+	// --- KB tree ---
+	kbExpanded map[string]bool // subtype key → expanded
+	kbCursor   int
+
+	// --- Read mode ---
+	readViewport    viewport.Model
+	readReturnView  View
+	readReturnPanel PanelID
+
+	// --- Dashboard ---
+	dashCursor int  // index into flat dashItem list
+	dashRight  bool // true = focus on right (TODO) column
 
 	// --- Tag browser ---
-	tagEntries []tagEntry
-	tagCursor  int
+	tagEntries   []tagEntry
+	tagCursor    int
+	tagDocCursor int // cursor within the documents panel on the right
 
 	// --- Spinner ---
 	spinnerFrame int
@@ -132,22 +145,24 @@ func New(cfg config.Config) Model {
 	}
 
 	return Model{
-		cfg:         cfg,
-		mode:        ModeNormal,
-		activePanel: PanelFiles,
-		activeView:  ViewAll,
-		keys:        DefaultKeyMap(),
-		theme:       NewTheme(cfg.Theme),
-		icons:       icons,
-		gitFileMap:  make(map[string]git.FileStatus),
-		pinnedPaths: make(map[string]bool),
-		loading:     true,
-		cmdInput:    cmd,
-		searchInput: srch,
-		varInput:    varIn,
-		width:       80,
-		height:      24,
-		preview:     viewport.New(53, 20), // ~67% of 80 width, 20 rows
+		cfg:             cfg,
+		mode:            ModeNormal,
+		activePanel:     PanelFiles,
+		activeView:      ViewDashboard,
+		keys:            DefaultKeyMap(),
+		theme:           NewTheme(cfg.Theme),
+		icons:           icons,
+		gitFileMap:      make(map[string]git.FileStatus),
+		pinnedPaths:     make(map[string]bool),
+		journalExpanded: make(map[string]bool),
+		kbExpanded:      make(map[string]bool),
+		loading:         true,
+		cmdInput:        cmd,
+		searchInput:     srch,
+		varInput:        varIn,
+		width:           80,
+		height:          24,
+		preview:         viewport.New(53, 20), // ~67% of 80 width, 20 rows
 	}
 }
 
@@ -171,17 +186,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Resize preview viewport to match new terminal dimensions.
 		leftWidth := m.width / 3
 		rightWidth := m.width - leftWidth - 1
-		previewHeight := m.height - 2 - 1 // content minus status/sep/header
+		previewHeight := m.height - 3 // tab bar + status bar + separator
 		if previewHeight < 1 {
 			previewHeight = 1
 		}
-		todoHeight := len(m.todos) + 2
-		vp := previewHeight - todoHeight
-		if vp < 1 {
-			vp = 1
-		}
 		m.preview.Width = rightWidth
-		m.preview.Height = vp
+		m.preview.Height = previewHeight
 		return m, nil
 
 	// --- Spinner ---
@@ -296,6 +306,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tagEntries = msg.entries
 		return m, nil
 
+	case readReadyMsg:
+		m.readViewport.SetContent(msg.content)
+		return m, nil
+
 	case deleteDoneMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("delete failed: %v", msg.err)
@@ -322,6 +336,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTemplateVars(msg)
 		case ModeDeleteConfirm:
 			return m.updateDeleteConfirm(msg)
+		case ModeRead:
+			return m.updateRead(msg)
 		}
 	}
 	return m, nil
@@ -357,13 +373,63 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k == "home":
 		m = m.jumpTop()
 
-	// Panel switching
+	// Pane switching (Tab cycles between the 4 named panes)
 	case k == "tab":
-		m.activePanel = m.activePanel.next()
+		m.activeView = cycleView(m.activeView, 1)
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
 	case k == "shift+tab":
-		m.activePanel = m.activePanel.prev()
+		m.activeView = cycleView(m.activeView, -1)
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
+
+	// Journal tree: l/h expand-collapse folders or switch panel
+	case (k == "l" || k == "right") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
+		rows := buildJournalRows(m.docs, m.journalExpanded)
+		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
+			// Expand this folder; collapse all others (one open at a time).
+			key := rows[m.journalCursor].month
+			for k2 := range m.journalExpanded {
+				delete(m.journalExpanded, k2)
+			}
+			m.journalExpanded[key] = true
+		} else {
+			m.activePanel = m.activePanel.next()
+		}
+	case (k == "h" || k == "left") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
+		rows := buildJournalRows(m.docs, m.journalExpanded)
+		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
+			// Collapse this folder.
+			delete(m.journalExpanded, rows[m.journalCursor].month)
+		} else {
+			m.activePanel = m.activePanel.prev()
+		}
+
+	// Dashboard: l/h switch between left and right columns
+	case (k == "l" || k == "right") && m.activeView == ViewDashboard:
+		m.dashRight = true
+	case (k == "h" || k == "left") && m.activeView == ViewDashboard:
+		m.dashRight = false
+
+	// KB tree: l/h expand-collapse folders or switch panel
+	case (k == "l" || k == "right") && m.activeView == ViewKB && m.activePanel == PanelFiles:
+		rows := buildKBRows(m.docs, m.kbExpanded)
+		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
+			key := rows[m.kbCursor].subtype
+			for k2 := range m.kbExpanded {
+				delete(m.kbExpanded, k2)
+			}
+			m.kbExpanded[key] = true
+		} else {
+			m.activePanel = m.activePanel.next()
+		}
+	case (k == "h" || k == "left") && m.activeView == ViewKB && m.activePanel == PanelFiles:
+		rows := buildKBRows(m.docs, m.kbExpanded)
+		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
+			delete(m.kbExpanded, rows[m.kbCursor].subtype)
+		} else {
+			m.activePanel = m.activePanel.prev()
+		}
 
 	// Panel navigation (h/l move focus between panels)
 	case k == "l", k == "right":
@@ -388,40 +454,119 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k == "?":
 		m.showHelp = !m.showHelp
 
-	// Number keys — view switching
+	// Number keys — pane switching
 	case k == "1":
 		m.activeView = ViewDashboard
 		m.searchActive = false
-		m.fileCursor = 0
+		m.dashCursor = 0
+		m.dashRight = false
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
 	case k == "2":
 		m.activeView = ViewJournal
 		m.searchActive = false
-		m.fileCursor = 0
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
+		m = initJournalView(m)
 	case k == "3":
 		m.activeView = ViewKB
 		m.searchActive = false
-		m.fileCursor = 0
+		m.kbCursor = 0
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
 	case k == "4":
-		m.activeView = ViewTodo
-		m.activePanel = PanelTodo
-		m.statusMsg = ""
-	case k == "5":
-		m.activeView = ViewRecent
-		m.searchActive = false
-		m.fileCursor = 0
-		m.statusMsg = ""
-	case k == "6":
 		m.activeView = ViewTags
 		m.searchActive = false
 		m.tagCursor = 0
+		m.activePanel = PanelFiles // always reset to left panel on entry (§9 Bug 1)
 		m.statusMsg = ""
 		return m, cmdBuildTagIndex(m.docs)
 
 	// Open in $EDITOR
 	case k == "enter":
+		// Dashboard: enter on left column file item opens in editor.
+		if m.activeView == ViewDashboard && !m.dashRight {
+			items := buildDashItems(m)
+			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
+				path := items[m.dashCursor].doc.Path
+				editor := resolveEditor(m.cfg.Editor)
+				if editor == "" {
+					m.statusMsg = "no editor configured ($EDITOR not set)"
+					return m, nil
+				}
+				return m, cmdOpenEditor(path, editor)
+			}
+			return m, nil
+		}
+
+		// KB tree: enter on folder row toggles expand/collapse.
+		if m.activeView == ViewKB && m.activePanel == PanelFiles {
+			rows := buildKBRows(m.docs, m.kbExpanded)
+			if m.kbCursor < len(rows) {
+				row := rows[m.kbCursor]
+				if row.isFolder {
+					if m.kbExpanded[row.subtype] {
+						delete(m.kbExpanded, row.subtype)
+					} else {
+						for k2 := range m.kbExpanded {
+							delete(m.kbExpanded, k2)
+						}
+						m.kbExpanded[row.subtype] = true
+					}
+					return m, nil
+				}
+				editor := resolveEditor(m.cfg.Editor)
+				if editor == "" {
+					m.statusMsg = "no editor configured ($EDITOR not set)"
+					return m, nil
+				}
+				return m, cmdOpenEditor(row.path, editor)
+			}
+			return m, nil
+		}
+
+		// Journal tree: enter on folder row toggles expand/collapse.
+		if m.activeView == ViewJournal && m.activePanel == PanelFiles {
+			rows := buildJournalRows(m.docs, m.journalExpanded)
+			if m.journalCursor < len(rows) {
+				row := rows[m.journalCursor]
+				if row.isFolder {
+					if m.journalExpanded[row.month] {
+						delete(m.journalExpanded, row.month)
+					} else {
+						for k2 := range m.journalExpanded {
+							delete(m.journalExpanded, k2)
+						}
+						m.journalExpanded[row.month] = true
+					}
+					return m, nil
+				}
+				// File row: open in editor.
+				editor := resolveEditor(m.cfg.Editor)
+				if editor == "" {
+					m.statusMsg = "no editor configured ($EDITOR not set)"
+					return m, nil
+				}
+				return m, cmdOpenEditor(row.path, editor)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
+
+		// Tag browser: Enter on doc panel opens the highlighted tagged doc.
+		if m.activeView == ViewTags && m.activePanel == PanelPreview {
+			tagged := m.taggedDocs()
+			if m.tagDocCursor < len(tagged) {
+				editor := resolveEditor(m.cfg.Editor)
+				if editor == "" {
+					m.statusMsg = "no editor configured ($EDITOR not set)"
+					return m, nil
+				}
+				return m, cmdOpenEditor(tagged[m.tagDocCursor].Path, editor)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
 		if selected := m.selectedDoc(); selected != "" {
 			editor := resolveEditor(m.cfg.Editor)
 			if editor == "" {
@@ -429,6 +574,31 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, cmdOpenEditor(selected, editor)
+		}
+		m.statusMsg = "no document selected"
+
+	// Open in full-screen read mode
+	case k == "o":
+		// Dashboard: o on left column file item enters read mode.
+		if m.activeView == ViewDashboard && !m.dashRight {
+			items := buildDashItems(m)
+			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
+				path := items[m.dashCursor].doc.Path
+				m.readReturnView = m.activeView
+				m.readReturnPanel = m.activePanel
+				m.readViewport = viewport.New(m.width, m.height-1)
+				m.mode = ModeRead
+				return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
+		if path := m.selectedDoc(); path != "" {
+			m.readReturnView = m.activeView
+			m.readReturnPanel = m.activePanel
+			m.readViewport = viewport.New(m.width, m.height-1)
+			m.mode = ModeRead
+			return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 		}
 		m.statusMsg = "no document selected"
 
@@ -476,16 +646,6 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = "no document selected"
 
-	// Smart filter cycling
-	case k == "f":
-		m.smartFilter = (m.smartFilter + 1) % (SmartFilterInbox + 1)
-		m.fileCursor = 0
-		if m.smartFilter == SmartFilterNone {
-			m.statusMsg = ""
-		} else {
-			m.statusMsg = m.smartFilter.String()
-		}
-
 	// Delete (with confirmation)
 	case k == "d":
 		if selected := m.selectedDoc(); selected != "" {
@@ -496,12 +656,6 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "no document selected"
 		}
 
-	// Lazygit handoff
-	case k == "ctrl+g":
-		if m.cfg.Git.Lazygit {
-			return m, cmdOpenLazygit(m.cfg.BaseDir)
-		}
-		m.statusMsg = "lazygit disabled (git.lazygit = false)"
 	}
 
 	// Fire preview load when cursor moves in file panel.
@@ -526,6 +680,27 @@ func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.deleteConfirmPath = ""
 		m.statusMsg = ""
 		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// updateRead handles key events in full-screen read mode (ModeRead).
+func (m Model) updateRead(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "esc":
+		m.mode = ModeNormal
+		m.activeView = m.readReturnView
+		m.activePanel = m.readReturnPanel
+	case "j", "down":
+		m.readViewport.LineDown(1)
+	case "k", "up":
+		m.readViewport.LineUp(1)
+	case " ", "pgdown":
+		m.readViewport.ViewDown()
+	case "b", "pgup":
+		m.readViewport.ViewUp()
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -706,6 +881,12 @@ func (m *Model) buildGitFileMap() {
 // selectedDoc returns the absolute path of the document under the cursor,
 // considering the active view and search state.
 func (m Model) selectedDoc() string {
+	if m.activeView == ViewJournal {
+		return m.journalSelectedPath()
+	}
+	if m.activeView == ViewKB {
+		return m.kbSelectedPath()
+	}
 	docs := m.visibleDocs()
 	if m.fileCursor >= 0 && m.fileCursor < len(docs) {
 		return docs[m.fileCursor].Path
@@ -722,44 +903,81 @@ func (m Model) visibleDocs() []search.Result {
 	case ViewJournal:
 		return filterByType(m.docs, "journal")
 	case ViewKB:
-		return filterByType(m.docs, "kb")
-	case ViewRecent:
-		return recentDocs(m.docs, 20)
+		return filterKBDocs(m.docs)
 	case ViewTags:
 		return nil // tag browser uses tagEntries, not docs
-	default: // ViewAll and ViewDashboard both use the full doc list (with smart filter for ViewAll)
-		if m.activeView == ViewAll {
-			return applySmartFilter(m.docs, m.smartFilter)
-		}
+	default:
 		return m.docs
 	}
 }
 
-// applySmartFilter post-filters docs based on the active SmartFilter.
-func applySmartFilter(docs []search.Result, f SmartFilter) []search.Result {
-	switch f {
-	case SmartFilterUntagged:
-		var out []search.Result
-		for _, d := range docs {
-			if len(d.Frontmatter.Tags) == 0 {
-				out = append(out, d)
-			}
+// docCounts returns the count of journal, kb (all kb_* types), and scratch documents.
+func docCounts(docs []search.Result) (journal, kb, scratch int) {
+	for _, d := range docs {
+		t := strings.ToLower(d.Frontmatter.Type)
+		switch {
+		case t == "journal":
+			journal++
+		case strings.HasPrefix(t, "kb"):
+			kb++
+		case t == "scratch":
+			scratch++
 		}
-		return out
-	case SmartFilterStaleWeek:
-		cutoff := time.Now().AddDate(0, 0, -7)
-		var out []search.Result
-		for _, d := range docs {
-			if d.Frontmatter.Modified.Before(cutoff) {
-				out = append(out, d)
-			}
-		}
-		return out
-	case SmartFilterInbox:
-		return filterByType(docs, "unsorted")
-	default:
-		return docs
 	}
+	return
+}
+
+// highlightedRelPath returns the relative path of the currently highlighted document
+// (relative to baseDir), or "" if none is selected or the path cannot be relativised.
+func highlightedRelPath(m Model) string {
+	var absPath string
+	switch {
+	case m.activeView == ViewDashboard && !m.dashRight:
+		items := buildDashItems(m)
+		if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
+			absPath = items[m.dashCursor].doc.Path
+		}
+	case m.activeView == ViewJournal:
+		absPath = m.journalSelectedPath()
+	case m.activeView == ViewKB:
+		absPath = m.kbSelectedPath()
+	case m.activeView == ViewTags && m.activePanel == PanelPreview:
+		tagged := m.taggedDocs()
+		if m.tagDocCursor >= 0 && m.tagDocCursor < len(tagged) {
+			absPath = tagged[m.tagDocCursor].Path
+		}
+	default:
+		docs := m.visibleDocs()
+		if m.fileCursor >= 0 && m.fileCursor < len(docs) {
+			absPath = docs[m.fileCursor].Path
+		}
+	}
+	if absPath == "" || m.cfg.BaseDir == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(m.cfg.BaseDir, absPath)
+	if err != nil {
+		return ""
+	}
+	return rel
+}
+
+// taggedDocs returns the documents that carry the currently selected tag.
+func (m Model) taggedDocs() []search.Result {
+	if m.tagCursor >= len(m.tagEntries) {
+		return nil
+	}
+	tag := m.tagEntries[m.tagCursor].Name
+	var out []search.Result
+	for _, d := range m.docs {
+		for _, t := range d.Frontmatter.Tags {
+			if t == tag {
+				out = append(out, d)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // filterByType returns results matching the given document type.
@@ -789,76 +1007,130 @@ func recentDocs(docs []search.Result, n int) []search.Result {
 // --- Cursor movement helpers ---
 
 func (m Model) moveCursorDown() Model {
-	switch m.activePanel {
-	case PanelFiles:
-		if m.activeView == ViewTags {
-			if m.tagCursor < len(m.tagEntries)-1 {
-				m.tagCursor++
-			}
-		} else {
-			docs := m.visibleDocs()
-			if m.fileCursor < len(docs)-1 {
-				m.fileCursor++
+	switch {
+	case m.activeView == ViewDashboard && !m.dashRight:
+		items := buildDashItems(m)
+		next := m.dashCursor + 1
+		for next < len(items) && items[next].isHeader {
+			next++
+		}
+		if next < len(items) {
+			m.dashCursor = next
+		}
+	case m.activeView == ViewJournal && m.activePanel == PanelFiles:
+		rows := buildJournalRows(m.docs, m.journalExpanded)
+		if m.journalCursor < len(rows)-1 {
+			m.journalCursor++
+		}
+	case m.activeView == ViewKB && m.activePanel == PanelFiles:
+		rows := buildKBRows(m.docs, m.kbExpanded)
+		if m.kbCursor < len(rows)-1 {
+			m.kbCursor++
+		}
+	case m.activeView == ViewTags && m.activePanel == PanelFiles:
+		if m.tagCursor < len(m.tagEntries)-1 {
+			m.tagCursor++
+			m.tagDocCursor = 0 // reset doc cursor when tag changes
+		}
+	case m.activeView == ViewTags && m.activePanel == PanelPreview:
+		if m.tagCursor < len(m.tagEntries) {
+			tagged := m.taggedDocs()
+			if m.tagDocCursor < len(tagged)-1 {
+				m.tagDocCursor++
 			}
 		}
-	case PanelTodo:
-		if m.todoCursor < len(m.todos)-1 {
-			m.todoCursor++
+	case m.activePanel == PanelFiles:
+		docs := m.visibleDocs()
+		if m.fileCursor < len(docs)-1 {
+			m.fileCursor++
 		}
 	}
 	return m
 }
 
 func (m Model) moveCursorUp() Model {
-	switch m.activePanel {
-	case PanelFiles:
-		if m.activeView == ViewTags {
-			if m.tagCursor > 0 {
-				m.tagCursor--
-			}
-		} else {
-			if m.fileCursor > 0 {
-				m.fileCursor--
-			}
+	switch {
+	case m.activeView == ViewDashboard && !m.dashRight:
+		items := buildDashItems(m)
+		prev := m.dashCursor - 1
+		for prev >= 0 && items[prev].isHeader {
+			prev--
 		}
-	case PanelTodo:
-		if m.todoCursor > 0 {
-			m.todoCursor--
+		if prev >= 0 {
+			m.dashCursor = prev
+		}
+	case m.activeView == ViewJournal && m.activePanel == PanelFiles:
+		if m.journalCursor > 0 {
+			m.journalCursor--
+		}
+	case m.activeView == ViewKB && m.activePanel == PanelFiles:
+		if m.kbCursor > 0 {
+			m.kbCursor--
+		}
+	case m.activeView == ViewTags && m.activePanel == PanelFiles:
+		if m.tagCursor > 0 {
+			m.tagCursor--
+			m.tagDocCursor = 0 // reset doc cursor when tag changes
+		}
+	case m.activeView == ViewTags && m.activePanel == PanelPreview:
+		if m.tagDocCursor > 0 {
+			m.tagDocCursor--
+		}
+	case m.activePanel == PanelFiles:
+		if m.fileCursor > 0 {
+			m.fileCursor--
 		}
 	}
 	return m
 }
 
 func (m Model) jumpTop() Model {
-	switch m.activePanel {
-	case PanelFiles:
-		if m.activeView == ViewTags {
+	if m.activePanel == PanelFiles {
+		switch m.activeView {
+		case ViewDashboard:
+			// Move to first non-header item.
+			items := buildDashItems(m)
+			for i, it := range items {
+				if !it.isHeader {
+					m.dashCursor = i
+					break
+				}
+			}
+		case ViewJournal:
+			m.journalCursor = 0
+		case ViewKB:
+			m.kbCursor = 0
+		case ViewTags:
 			m.tagCursor = 0
-		} else {
+		default:
 			m.fileCursor = 0
 		}
-	case PanelTodo:
-		m.todoCursor = 0
 	}
 	return m
 }
 
 func (m Model) jumpBottom() Model {
-	switch m.activePanel {
-	case PanelFiles:
-		if m.activeView == ViewTags {
+	if m.activePanel == PanelFiles {
+		switch m.activeView {
+		case ViewJournal:
+			rows := buildJournalRows(m.docs, m.journalExpanded)
+			if len(rows) > 0 {
+				m.journalCursor = len(rows) - 1
+			}
+		case ViewKB:
+			rows := buildKBRows(m.docs, m.kbExpanded)
+			if len(rows) > 0 {
+				m.kbCursor = len(rows) - 1
+			}
+		case ViewTags:
 			if len(m.tagEntries) > 0 {
 				m.tagCursor = len(m.tagEntries) - 1
 			}
-		} else {
+		default:
 			docs := m.visibleDocs()
 			if len(docs) > 0 {
 				m.fileCursor = len(docs) - 1
 			}
-		}
-	case PanelTodo:
-		if len(m.todos) > 0 {
-			m.todoCursor = len(m.todos) - 1
 		}
 	}
 	return m

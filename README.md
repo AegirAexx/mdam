@@ -10,8 +10,8 @@ Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https
 - Your editor does the editing — mdam never touches document bodies.
 - mdam handles organization, navigation, and workflow automation.
 
-> **Status: v0.1.0 — early, untested alpha.**
-> All planned features are implemented but **none have been fully tested or verified**. Do not rely on any part of mdam for important data yet. The CLI surface, config format, and behavior may all change. Currently in active testing — features will be marked as tested individually as they are confirmed working.
+> **Status: v0.1.0 — early alpha.**
+> The CLI surface, config format, and behavior may change before v1.0.
 
 ---
 
@@ -23,87 +23,76 @@ Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https
 - `$EDITOR` environment variable set (e.g., `nvim`)
 - Git
 
-### Recommended companion tools
-
-- [neovim](https://neovim.io/) — mdam delegates all editing to `$EDITOR`; nvim pairs well
-- [lazygit](https://github.com/jesseduffield/lazygit) — mdam can hand off to lazygit for git operations (`ctrl+g`)
-
 ### Build from source
 
 ```bash
 git clone https://github.com/AegirAexx/mdam.git
 cd mdam
 go build -o mdam ./cmd/mdam
-# Optionally move to your PATH:
-mv mdam ~/.local/bin/
+mv mdam ~/.local/bin/   # optional
 ```
 
 ### First run
 
-On first launch, mdam detects that no `base_dir` has been configured and starts an interactive setup flow. This will:
+On first launch, mdam detects no `base_dir` has been configured and starts an interactive setup flow:
 
-1. Prompt you for a base directory path (e.g., `~/notes`) — this becomes the root of your managed document tree.
-2. Create the directory structure: `journal/`, `kb/`, `todo/`, `scratch/`, and `.templates/`.
-3. Generate a default config file at `~/.config/mdam/config.yml`.
-4. Seed the `.templates/` directory with built-in templates for journals, knowledge base documents, and TODOs.
-5. Create an empty scratch pad at `scratch/scratch.md`.
+1. Prompts for a base directory path (e.g., `~/notes`).
+2. Creates the directory structure: `journal/`, `kb/`, `todo/`, `scratch/`, `.templates/`.
+3. Writes a default config to `~/.config/mdam/config.yml`.
+4. Seeds `.templates/` with built-in templates and creates an empty scratch pad.
 
-This setup is fully idempotent — running it again won't overwrite existing files or directories.
+Setup is fully idempotent — re-running won't overwrite existing files.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Launch the TUI
-mdam
-
-# Create today's journal entry (CLI)
-mdam journal create
-
-# List open TODOs
-mdam todo list
-
-# Fuzzy search across all documents
-mdam search "nginx"
-
-# Import a markdown file
-mdam import ~/Downloads/notes.md
+mdam                      # Launch the TUI
+mdam journal create       # Create today's journal entry (CLI)
+mdam todo list            # List open TODOs
+mdam search "nginx"       # Fuzzy search across all documents
+mdam import ~/notes.md    # Import a markdown file
 ```
 
 ### TUI layout
 
 ```
-▶ Files ──────────────────────│─ Preview ──────────────────────────
-> 2026-03-14.md          [M]  │  Journal 2026-03-14
-  2026-03-13.md               │
-  setup-nginx.md         [?]  │  type: journal
-  deploy-runbook.md           │  tags: daily
-  meeting-notes-…             │  modified: 2026-03-14
-                              │─ TODOs ─────────────────────────────
-                              │> - [ ] Review PR #42 @work
-                              │  - [ ] Buy groceries @personal
-──────────────────────────────────────────────────────────────────
- NORMAL │ main ↑2 │ 5 docs              /search  :cmd  ?help  q:quit
+ Dashboard   Journal   KB   Tag Browser
+▶ Overview ─────────────────│─ Preview ──────────────────────────
+ Journal                    │  Journal 2026-04-03
+ 2026-04-03                 │
+ 2026-04-01                 │  tags: daily
+ Pinned                     │
+ Recent                     │
+ Setup Nginx                │
+────────────────────────────────────────────────────────────────
+ NORMAL │ main ↑2 │ 3 journal · 1 kb · 0 scratch   /  :  o:read  ?  q
 ```
+
+The tab bar at the top shows all four panes. The left column is navigable; the right shows a live glamour-rendered preview of the selected document.
 
 ### Keybindings (summary)
 
 | Key | Action |
 |---|---|
 | `j` / `k` | Move down / up |
-| `1` | Dashboard (today's context) |
-| `2` / `3` / `4` / `5` / `6` | Journal / KB / TODOs / Recent / Tags |
-| `n` | New document (journal or KB) |
+| `h` / `l` | Switch panels or expand/collapse tree folders |
+| `Tab` / `Shift+Tab` | Cycle panes forward / backward |
+| `1` | Dashboard |
+| `2` | Journal (month-folder tree) |
+| `3` | KB (subtype-folder tree) |
+| `4` | Tag Browser |
 | `Enter` | Open selected document in `$EDITOR` |
+| `o` | Open selected document in full-screen read mode |
 | `s` | Open scratch pad in `$EDITOR` |
+| `n` | New document (template picker) |
 | `d` | Delete with confirmation (`y` / `n`) |
 | `p` | Pin / unpin |
-| `f` | Cycle smart filter (Untagged → Stale → Inbox) |
+| `e` | Export (strip frontmatter) |
 | `/` | Fuzzy search |
 | `:` | Command mode (`:todo sweep`, `:q`) |
 | `?` | Help overlay |
-| `ctrl+g` | Open lazygit |
 | `q` | Quit |
 
 See [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the full reference.
@@ -115,74 +104,41 @@ See [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) for the full reference.
 mdam reads `~/.config/mdam/config.yml`. Run `mdam config --edit` to open it.
 
 ```yaml
-# mdam configuration — generated on first run.
-
-# Text editor to open documents (defaults to $EDITOR).
-editor: "nvim"
-
-# Your name, used for document metadata.
-author: "AegirAexx"
-
-# Root directory where MadaM manages your documents.
-# Leave empty to be prompted on every startup until set.
-base_dir: /home/aexx/notes
-
-# Directory for exported documents (frontmatter stripped).
+editor: "nvim"          # defaults to $EDITOR
+author: "YourName"
+base_dir: ~/notes       # root of your document tree
 export_dir: ~/Downloads
-
-# TUI color theme. Options: tokyonight, nord, gruvbox, catppuccin, dracula
-theme: tokyonight
-
-# Use Nerd Font icons in the TUI (requires a patched terminal font).
-nerd_fonts: true
-
-import:
-  # Directory for files dropped in for import. Defaults to {base_dir}/.inbox.
-  inbox_dir: ""
-  # Auto-fix invalid filenames and frontmatter during import.
-  auto_fix: false
-
-git:
-  # Enable git integration (shows modified/untracked indicators).
-  enabled: true
-  # Automatically commit after edits.
-  auto_commit: false
-  # Use lazygit for git operations.
-  lazygit: true
+theme: tokyonight       # tokyonight | nord | gruvbox | catppuccin | dracula
+nerd_fonts: false       # set true if your terminal uses a Nerd Font
 
 todo:
-  # Default category for new TODO items.
-  default_category: personal
-  # Days before completed tasks are moved to archive.
   archive_after_days: 30
 
 journal:
-  # Automatically create today's journal entry on startup.
-  auto_create: true
-  # Sweep incomplete tasks from past entries when creating a new journal.
-  sweep_on_create: true
+  auto_create: true     # create today's entry on startup
+  sweep_on_create: true # carry forward open tasks from yesterday
 ```
 
 ---
 
 ## Features
 
-| Feature | Status | Description |
-|---|---|---|
-| Daily journals | ⚠️ untested | Auto-created from templates, named `YYYY-MM-DD.md`, sweep TODOs on create |
-| Knowledge base | ⚠️ untested | Organized reference documents with user-defined taxonomy and tags |
-| TODO system | ⚠️ untested | Task backlog with category, priority, and date fields; sweep from journals |
-| Scratch pad | ⚠️ untested | Persistent clipboard singleton, one keypress away (`s`) |
-| Templates | ⚠️ untested | User-extensible document scaffolding; add `.md` files to `{base_dir}/.templates/` |
-| Fuzzy search | ⚠️ untested | Across frontmatter fields, filenames, and document content |
-| Export | ⚠️ untested | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
-| Git integration | ⚠️ untested | Per-file status markers in the TUI, lazygit handoff via `ctrl+g` |
-| Dashboard | ⚠️ untested | Today's journal, open TODO count, pinned docs, and recent activity (`1`) |
-| Tag browser | ⚠️ untested | All tags with document counts; drill into any tag (`6`) |
-| Smart filter | ⚠️ untested | Post-filter by Untagged / Stale (>7 days) / Inbox (`f`) |
-| Pin / unpin | ⚠️ untested | Bookmark documents; pins persist to `~/.config/mdam/pins.json` (`p`) |
-| Color theming | ⚠️ untested | Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula |
-| Markdown preview | ⚠️ untested | Glamour-rendered live preview in the right panel |
+| Feature | Description |
+|---|---|
+| Daily journals | Auto-created from templates, named `YYYY-MM-DD.md`, grouped in a month-folder tree |
+| Knowledge base | Subtype folders derived from `kb_*` type prefix (e.g. `kb_summary` → Summary folder) |
+| TODO system | Task backlog with category, priority, and date fields; sweep from journal entries |
+| Scratch pad | Persistent singleton, one keypress away (`s`) |
+| Templates | User-extensible scaffolding; add `.md` files to `{base_dir}/.templates/` |
+| Fuzzy search | Across frontmatter fields, filenames, and document bodies |
+| Export | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
+| Git integration | Per-file status markers (modified / untracked) in the file panel |
+| Dashboard | Navigable two-column view: recent journal / pinned / recent docs + open TODOs |
+| Tag browser | All tags with document counts; navigate into any tag to see its documents |
+| Read mode | Full-screen glamour-rendered overlay (`o`); scroll with `j`/`k`/`Space` |
+| Pin / unpin | Bookmark documents; pins persist to `~/.config/mdam/pins.json` (`p`) |
+| Color theming | Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula |
+| Markdown preview | Live glamour-rendered preview in the right panel |
 
 ---
 
@@ -195,7 +151,6 @@ journal:
 | [docs/FRONTMATTER.md](docs/FRONTMATTER.md) | Frontmatter field contract |
 | [docs/TODO-FORMAT.md](docs/TODO-FORMAT.md) | TODO task syntax and sweep/archive |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Project structure, code style, testing |
-| [docs/specs/mdam-spec-v1.md](docs/specs/mdam-spec-v1.md) | Full project specification |
 
 ---
 
