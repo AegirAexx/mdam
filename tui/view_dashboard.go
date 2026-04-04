@@ -8,17 +8,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/AegirAexx/mdam/internal/search"
+	"github.com/AegirAexx/mdam/internal/todo"
 )
 
 // dashItem represents a single row in the dashboard left column.
 type dashItem struct {
-	isHeader bool
-	label    string        // section header label or display text
-	doc      search.Result // zero value for headers
+	isHeader      bool
+	isBlank       bool   // non-navigable separator line between sections
+	isPlaceholder bool   // non-navigable muted empty-state row
+	label         string // section header label, display text, or placeholder text
+	doc           search.Result // zero value for headers/blanks/placeholders
 }
 
 // buildDashItems returns the flat navigable item list for the dashboard left column.
 // Sections: Journal (last 5 days), Pinned, Recent (last 20). Docs are deduped by path.
+// Blank rows separate sections; placeholder rows appear when a section is empty.
 func buildDashItems(m Model) []dashItem {
 	var items []dashItem
 	seen := map[string]bool{}
@@ -38,29 +42,48 @@ func buildDashItems(m Model) []dashItem {
 
 	// Journal: last 5 days.
 	items = append(items, dashItem{isHeader: true, label: "Journal"})
+	items = append(items, dashItem{isBlank: true})
 	journalDocs := filterByType(m.docs, "journal")
 	recent := recentDocs(journalDocs, 5)
-	for _, d := range recent {
-		addDoc(d)
+	if len(recent) == 0 {
+		items = append(items, dashItem{isPlaceholder: true, label: "No recent journal entries."})
+	} else {
+		for _, d := range recent {
+			addDoc(d)
+		}
 	}
+	items = append(items, dashItem{isBlank: true})
 
 	// Pinned.
+	items = append(items, dashItem{isHeader: true, label: "Pinned"})
+	items = append(items, dashItem{isBlank: true})
 	var pinned []search.Result
 	for _, d := range m.docs {
 		if m.pinnedPaths[d.Path] {
 			pinned = append(pinned, d)
 		}
 	}
-	items = append(items, dashItem{isHeader: true, label: "Pinned"})
-	for _, d := range pinned {
-		addDoc(d)
+	if len(pinned) == 0 {
+		items = append(items, dashItem{isPlaceholder: true, label: "No pinned documents."})
+	} else {
+		for _, d := range pinned {
+			addDoc(d)
+		}
 	}
+	items = append(items, dashItem{isBlank: true})
 
 	// Recent (last 20, excluding already-shown).
 	items = append(items, dashItem{isHeader: true, label: "Recent"})
+	items = append(items, dashItem{isBlank: true})
 	allRecent := recentDocs(m.docs, 20)
+	recentAdded := 0
 	for _, d := range allRecent {
-		addDoc(d)
+		if addDoc(d) {
+			recentAdded++
+		}
+	}
+	if recentAdded == 0 {
+		items = append(items, dashItem{isPlaceholder: true, label: "No recent documents."})
 	}
 
 	return items
@@ -122,9 +145,16 @@ func (m Model) renderDashLeft(width, height int) string {
 	for i := start; i < len(items) && len(lines) < height-1; i++ {
 		it := items[i]
 		var line string
-		if it.isHeader {
-			line = m.theme.DashboardHeader.Render(" " + truncate(it.label, width-2))
-		} else {
+		switch {
+		case it.isBlank:
+			line = ""
+		case it.isHeader:
+			line = m.theme.Accent.Render(" " + truncate(it.label, width-2))
+		case it.isPlaceholder:
+			line = lipgloss.NewStyle().PaddingLeft(1).Render(
+				m.theme.Muted.Render(truncate(it.label, width-2)),
+			)
+		default:
 			var prefix string
 			if strings.Contains(it.doc.Path, today) {
 				prefix = m.icons.Pinned + " "
@@ -141,24 +171,59 @@ func (m Model) renderDashLeft(width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderDashRight renders the static TODO right column.
+// renderDashRight renders the static TODO right column with priority grouping.
 func (m Model) renderDashRight(width, height int) string {
 	header := styledPanelHeader("TODOs", m.dashRight, width, m.theme, m.icons)
 	var lines []string
 	lines = append(lines, header)
 
 	if len(m.todos) == 0 {
-		lines = append(lines, m.theme.PreviewMeta.Render("  (no open tasks)"))
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No open tasks."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
-	for _, task := range m.todos {
+	type priorityGroup struct {
+		label string
+		prio  string
+	}
+	groups := []priorityGroup{
+		{"!high", "high"},
+		{"!medium", "medium"},
+		{"!low", "low"},
+		{"", ""},
+	}
+
+	for _, g := range groups {
+		var tasks []todo.Task
+		for _, t := range m.todos {
+			if g.prio == "" {
+				// unprioritised: tasks with no priority set
+				if t.Priority == "" || strings.EqualFold(t.Priority, "none") {
+					tasks = append(tasks, t)
+				}
+			} else if strings.EqualFold(t.Priority, g.prio) {
+				tasks = append(tasks, t)
+			}
+		}
+		if len(tasks) == 0 {
+			continue
+		}
 		if len(lines) >= height-1 {
 			break
 		}
-		lines = append(lines, m.theme.TodoOpen.Render(
-			fmt.Sprintf("  · %s", truncate(task.Text, width-4)),
-		))
+		if g.label != "" {
+			lines = append(lines, m.theme.Subtle.Render(" "+g.label))
+		}
+		for _, task := range tasks {
+			if len(lines) >= height-1 {
+				break
+			}
+			lines = append(lines, m.theme.FileNormal.Render(
+				fmt.Sprintf("  %s", truncate(task.Text, width-3)),
+			))
+		}
 	}
 	return strings.Join(lines, "\n")
 }

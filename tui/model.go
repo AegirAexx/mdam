@@ -75,7 +75,8 @@ type Model struct {
 	pinnedPaths map[string]bool // set of pinned absolute paths
 
 	// --- Delete confirmation ---
-	deleteConfirmPath string
+	deleteConfirmPath  string
+	deleteConfirmTitle string // document title shown in delete confirm prompt (§7.1)
 
 	// --- Journal tree ---
 	journalExpanded map[string]bool // month key ("2026-04") → expanded
@@ -89,6 +90,7 @@ type Model struct {
 	readViewport    viewport.Model
 	readReturnView  View
 	readReturnPanel PanelID
+	readDocTitle    string // document title shown in read mode header (§3.5)
 
 	// --- Dashboard ---
 	dashCursor int  // index into flat dashItem list
@@ -582,11 +584,17 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Dashboard: o on left column file item enters read mode.
 		if m.activeView == ViewDashboard && !m.dashRight {
 			items := buildDashItems(m)
-			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
-				path := items[m.dashCursor].doc.Path
+			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader && !items[m.dashCursor].isBlank && !items[m.dashCursor].isPlaceholder {
+				it := items[m.dashCursor]
+				path := it.doc.Path
+				title := it.doc.Frontmatter.Title
+				if title == "" {
+					title = filepath.Base(path)
+				}
 				m.readReturnView = m.activeView
 				m.readReturnPanel = m.activePanel
-				m.readViewport = viewport.New(m.width, m.height-1)
+				m.readDocTitle = title
+				m.readViewport = viewport.New(m.width, m.height-3)
 				m.mode = ModeRead
 				return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 			}
@@ -596,7 +604,8 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if path := m.selectedDoc(); path != "" {
 			m.readReturnView = m.activeView
 			m.readReturnPanel = m.activePanel
-			m.readViewport = viewport.New(m.width, m.height-1)
+			m.readDocTitle = m.selectedDocTitle()
+			m.readViewport = viewport.New(m.width, m.height-3)
 			m.mode = ModeRead
 			return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 		}
@@ -651,7 +660,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if selected := m.selectedDoc(); selected != "" {
 			m.mode = ModeDeleteConfirm
 			m.deleteConfirmPath = selected
-			m.statusMsg = fmt.Sprintf("Delete %s? (y/n)", filepath.Base(selected))
+			m.deleteConfirmTitle = m.selectedDocTitle()
+			if m.deleteConfirmTitle == "" {
+				m.deleteConfirmTitle = filepath.Base(selected)
+			}
 		} else {
 			m.statusMsg = "no document selected"
 		}
@@ -674,10 +686,12 @@ func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y":
 		m.mode = ModeNormal
 		m.statusMsg = ""
+		m.deleteConfirmTitle = ""
 		return m, cmdDeleteDoc(m.deleteConfirmPath)
 	case "n", "esc":
 		m.mode = ModeNormal
 		m.deleteConfirmPath = ""
+		m.deleteConfirmTitle = ""
 		m.statusMsg = ""
 		return m, nil
 	case "ctrl+c":
@@ -894,6 +908,50 @@ func (m Model) selectedDoc() string {
 	return ""
 }
 
+// selectedDocTitle returns the frontmatter title of the document under the cursor,
+// falling back to the base filename if the title is empty.
+func (m Model) selectedDocTitle() string {
+	var path string
+	var title string
+	if m.activeView == ViewJournal {
+		path = m.journalSelectedPath()
+		rows := buildJournalRows(filterByType(m.docs, "journal"), m.journalExpanded)
+		if m.journalCursor >= 0 && m.journalCursor < len(rows) {
+			r := rows[m.journalCursor]
+			if !r.isFolder {
+				for _, d := range m.docs {
+					if d.Path == r.path {
+						title = d.Frontmatter.Title
+						break
+					}
+				}
+			}
+		}
+	} else if m.activeView == ViewKB {
+		path = m.kbSelectedPath()
+		rows := buildKBRows(m.docs, m.kbExpanded)
+		if m.kbCursor >= 0 && m.kbCursor < len(rows) {
+			r := rows[m.kbCursor]
+			if !r.isFolder {
+				title = r.title
+			}
+		}
+	} else {
+		docs := m.visibleDocs()
+		if m.fileCursor >= 0 && m.fileCursor < len(docs) {
+			path = docs[m.fileCursor].Path
+			title = docs[m.fileCursor].Frontmatter.Title
+		}
+	}
+	if title != "" {
+		return title
+	}
+	if path != "" {
+		return filepath.Base(path)
+	}
+	return ""
+}
+
 // visibleDocs returns the slice of documents appropriate for the current view.
 func (m Model) visibleDocs() []search.Result {
 	if m.searchActive {
@@ -934,8 +992,11 @@ func highlightedRelPath(m Model) string {
 	switch {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
-		if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
-			absPath = items[m.dashCursor].doc.Path
+		if m.dashCursor < len(items) {
+			it := items[m.dashCursor]
+			if !it.isHeader && !it.isBlank && !it.isPlaceholder {
+				absPath = it.doc.Path
+			}
 		}
 	case m.activeView == ViewJournal:
 		absPath = m.journalSelectedPath()
@@ -1011,7 +1072,7 @@ func (m Model) moveCursorDown() Model {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		next := m.dashCursor + 1
-		for next < len(items) && items[next].isHeader {
+		for next < len(items) && (items[next].isHeader || items[next].isBlank || items[next].isPlaceholder) {
 			next++
 		}
 		if next < len(items) {
@@ -1053,7 +1114,7 @@ func (m Model) moveCursorUp() Model {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		prev := m.dashCursor - 1
-		for prev >= 0 && items[prev].isHeader {
+		for prev >= 0 && (items[prev].isHeader || items[prev].isBlank || items[prev].isPlaceholder) {
 			prev--
 		}
 		if prev >= 0 {
@@ -1088,10 +1149,10 @@ func (m Model) jumpTop() Model {
 	if m.activePanel == PanelFiles {
 		switch m.activeView {
 		case ViewDashboard:
-			// Move to first non-header item.
+			// Move to first navigable (non-header, non-blank, non-placeholder) item.
 			items := buildDashItems(m)
 			for i, it := range items {
-				if !it.isHeader {
+				if !it.isHeader && !it.isBlank && !it.isPlaceholder {
 					m.dashCursor = i
 					break
 				}

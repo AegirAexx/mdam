@@ -16,10 +16,12 @@ import (
 // either a month-folder header or a file entry.
 type journalRow struct {
 	isFolder bool
-	month    string // "2026-04" — used as key in expanded map
-	label    string // display label
-	path     string // absolute path (file rows only)
+	month    string    // "2026-04" — used as key in expanded map
+	icon     string    // "▶" or "▼" (folder rows only)
+	label    string    // display label: YYYY-MM for folders, YYYY-MM-DD for files
+	path     string    // absolute path (file rows only)
 	date     time.Time
+	count    int // number of files in this month (folder rows only)
 }
 
 // buildJournalRows constructs the flat visible list of rows from the given docs
@@ -29,7 +31,6 @@ func buildJournalRows(docs []search.Result, expanded map[string]bool) []journalR
 	// Group by month key.
 	type monthGroup struct {
 		key   string
-		label string
 		files []journalRow
 	}
 	byMonth := map[string]*monthGroup{}
@@ -48,10 +49,7 @@ func buildJournalRows(docs []search.Result, expanded map[string]bool) []journalR
 		}
 		key := t.Format("2006-01")
 		if _, ok := byMonth[key]; !ok {
-			byMonth[key] = &monthGroup{
-				key:   key,
-				label: t.Format("January - 2006"),
-			}
+			byMonth[key] = &monthGroup{key: key}
 		}
 		byMonth[key].files = append(byMonth[key].files, journalRow{
 			isFolder: false,
@@ -84,7 +82,9 @@ func buildJournalRows(docs []search.Result, expanded map[string]bool) []journalR
 		rows = append(rows, journalRow{
 			isFolder: true,
 			month:    k,
-			label:    fmt.Sprintf("%s %s", icon, g.label),
+			icon:     icon,
+			label:    k, // bare YYYY-MM key (§9.1 TUI-UX)
+			count:    len(g.files),
 		})
 		if isExpanded {
 			rows = append(rows, g.files...)
@@ -168,13 +168,17 @@ func (m Model) renderJournalFilePanel(width, height int) string {
 	lines = append(lines, header)
 
 	if m.journalExpanded == nil {
-		lines = append(lines, "  (no entries)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No journal entries."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
 	rows := buildJournalRows(m.docs, m.journalExpanded)
 	if len(rows) == 0 {
-		lines = append(lines, "  (no journal entries)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No journal entries."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
@@ -186,17 +190,25 @@ func (m Model) renderJournalFilePanel(width, height int) string {
 
 	for i := start; i < len(rows) && len(lines) < height-1; i++ {
 		row := rows[i]
-		var itemText string
-		if row.isFolder {
-			itemText = " " + truncate(row.label, width-2)
-		} else {
-			itemText = "     " + truncate(row.label, width-6)
-		}
 		var line string
-		if i == m.journalCursor && focused {
-			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+		if row.isFolder {
+			// Render: icon + label in Primary, [count] in Subtle outside reverse block.
+			countStr := m.theme.Subtle.Render(fmt.Sprintf(" [%d]", row.count))
+			countWidth := lipgloss.Width(countStr)
+			nameText := " " + row.icon + " " + truncate(row.label, width-4-countWidth)
+			if i == m.journalCursor && focused {
+				namePart := lipgloss.NewStyle().Reverse(true).Width(width - countWidth).Render(nameText)
+				line = namePart + countStr
+			} else {
+				line = m.theme.FileNormal.Render(nameText) + countStr
+			}
 		} else {
-			line = m.theme.FileNormal.Render(itemText)
+			itemText := "  " + truncate(row.label, width-3)
+			if i == m.journalCursor && focused {
+				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+			} else {
+				line = m.theme.FileNormal.Render(itemText)
+			}
 		}
 		lines = append(lines, line)
 	}

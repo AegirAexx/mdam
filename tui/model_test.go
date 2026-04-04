@@ -1518,10 +1518,10 @@ func TestBuildDashItems(t *testing.T) {
 		t.Errorf("buildDashItems: expected at least 2 headers, got %d", headers)
 	}
 
-	// No duplicate paths among file items.
+	// No duplicate paths among actual file items (skip headers, blanks, placeholders).
 	seen := map[string]bool{}
 	for _, it := range items {
-		if it.isHeader {
+		if it.isHeader || it.isBlank || it.isPlaceholder {
 			continue
 		}
 		if seen[it.doc.Path] {

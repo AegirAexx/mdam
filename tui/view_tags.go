@@ -81,12 +81,15 @@ func (m Model) renderTagBrowser() string {
 
 // renderTagPanel renders the list of tags in the left panel.
 func (m Model) renderTagPanel(width, height int) string {
-	header := styledPanelHeader("Tags", true, width, m.theme, m.icons)
+	tagFocused := m.activePanel == PanelFiles
+	header := styledPanelHeader("Tags", tagFocused, width, m.theme, m.icons)
 	var lines []string
 	lines = append(lines, header)
 
 	if len(m.tagEntries) == 0 {
-		lines = append(lines, "  (no tags)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No tags found."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
@@ -96,7 +99,6 @@ func (m Model) renderTagPanel(width, height int) string {
 		start = m.tagCursor - visibleRows + 1
 	}
 
-	tagFocused := m.activePanel == PanelFiles
 	for i := start; i < len(m.tagEntries) && len(lines) < height-1; i++ {
 		te := m.tagEntries[i]
 		tagName := m.icons.Tag + te.Name
@@ -121,14 +123,18 @@ func (m Model) renderTagDocPanel(width, height int) string {
 	lines = append(lines, header)
 
 	if m.tagCursor >= len(m.tagEntries) {
-		lines = append(lines, "  (select a tag)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("Select a tag to see documents."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
 	tagged := m.taggedDocs()
 
 	if len(tagged) == 0 {
-		lines = append(lines, "  (no documents)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("Select a tag to see documents."),
+		))
 		return strings.Join(lines, "\n")
 	}
 

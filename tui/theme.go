@@ -48,8 +48,14 @@ type Theme struct {
 	DashboardItem   lipgloss.Style
 
 	// Tab bar
-	TabActive   lipgloss.Style // active pane tab — inverted colors
-	TabInactive lipgloss.Style // inactive pane tab — muted text
+	TabActive   lipgloss.Style // active pane tab — Bold + Accent fg
+	TabInactive lipgloss.Style // inactive pane tab — Subtle fg
+
+	// Semantic hierarchy (§4 TUI-UX.md)
+	Accent  lipgloss.Style // Bold + accent fg — active tabs, active headers, section headers
+	Subtle  lipgloss.Style // dim fg — secondary info, counts, inactive tabs
+	Muted   lipgloss.Style // dimmer + Italic — placeholders, hints, disabled states
+	Warning lipgloss.Style // red fg — delete confirmation
 
 	// GlamourStyle is the name passed to glamour.Render.
 	GlamourStyle string
@@ -113,8 +119,12 @@ func tokyonightTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(comment)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
-		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabActive:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(blue)).Padding(0, 1),
 		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
+		Accent:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(blue)),
+		Subtle:          lipgloss.NewStyle().Foreground(lipgloss.Color(dim)),
+		Muted:           lipgloss.NewStyle().Foreground(lipgloss.Color(comment)).Italic(true),
+		Warning:         lipgloss.NewStyle().Foreground(lipgloss.Color(red)),
 		GlamourStyle:    "dark",
 	}
 }
@@ -158,8 +168,12 @@ func nordTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
-		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabActive:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
+		Accent:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cyan)),
+		Subtle:          lipgloss.NewStyle().Foreground(lipgloss.Color(dim)),
+		Muted:           lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Italic(true),
+		Warning:         lipgloss.NewStyle().Foreground(lipgloss.Color(red)),
 		GlamourStyle:    "notty",
 	}
 }
@@ -203,8 +217,12 @@ func gruvboxTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(yellow)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(yellow)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
-		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabActive:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(yellow)).Padding(0, 1),
 		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
+		Accent:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(yellow)),
+		Subtle:          lipgloss.NewStyle().Foreground(lipgloss.Color(dim)),
+		Muted:           lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Italic(true),
+		Warning:         lipgloss.NewStyle().Foreground(lipgloss.Color(red)),
 		GlamourStyle:    "dark",
 	}
 }
@@ -248,8 +266,12 @@ func catppuccinTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
-		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabActive:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(blue)).Padding(0, 1),
 		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
+		Accent:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(blue)),
+		Subtle:          lipgloss.NewStyle().Foreground(lipgloss.Color(dim)),
+		Muted:           lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Italic(true),
+		Warning:         lipgloss.NewStyle().Foreground(lipgloss.Color(red)),
 		GlamourStyle:    "dark",
 	}
 }
@@ -294,8 +316,12 @@ func draculaTheme() Theme {
 		FilterBar:       lipgloss.NewStyle().Background(lipgloss.Color(dim)).Foreground(lipgloss.Color(cyan)).Padding(0, 1),
 		DashboardHeader: lipgloss.NewStyle().Foreground(lipgloss.Color(purple)).Bold(true),
 		DashboardItem:   lipgloss.NewStyle().Foreground(lipgloss.Color(fg)),
-		TabActive:       lipgloss.NewStyle().Reverse(true).Bold(true).Padding(0, 1),
+		TabActive:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(purple)).Padding(0, 1),
 		TabInactive:     lipgloss.NewStyle().Foreground(lipgloss.Color(dim)).Padding(0, 1),
+		Accent:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(purple)),
+		Subtle:          lipgloss.NewStyle().Foreground(lipgloss.Color(dim)),
+		Muted:           lipgloss.NewStyle().Foreground(lipgloss.Color(blue)).Italic(true),
+		Warning:         lipgloss.NewStyle().Foreground(lipgloss.Color(red)),
 		GlamourStyle:    "dark",
 	}
 }
