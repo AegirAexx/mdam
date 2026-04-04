@@ -25,6 +25,23 @@ It is an admin/routing tool — it never edits document bodies. All editing is d
 - Frontmatter updates are the only other permitted file mutations.
 - No editing. No caching. The filesystem is always the source of truth.
 
+## TUI and UI Work
+
+**Before making any change to the TUI — new view, new component, modified layout,
+new panel, or any styling change — read `docs/TUI-UX.md` in full.**
+
+`docs/TUI-UX.md` is the single source of truth for all interface decisions. It is
+not optional and not a suggestion. Every UI output must comply with it. The document
+defines spacing, focus indicators, empty states, text hierarchy, status bar layout,
+tree anatomy, and a hard list of things the agent must never do.
+
+Key rules that apply to every UI task without exception:
+- Every list or tree that can be empty must show a placeholder (§5).
+- Focus is always indicated by full-width `Reverse(true)`, never color alone (§3.1).
+- All panels have 1-cell horizontal internal padding (§2.1).
+- Section headers are always visually distinct from body rows (§2.3, §4).
+- Colors always come from `theme.*` — never hardcoded (§4).
+
 ## Frontmatter Contract
 
 Field order is mandatory for consistency:
