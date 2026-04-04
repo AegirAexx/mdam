@@ -172,7 +172,7 @@ func (m Model) renderFilePanel(width, height int) string {
 		name := filepath.Base(doc.Path)
 		pinMarker := ""
 		if m.pinnedPaths[doc.Path] {
-			pinMarker = " " + m.icons.Pinned
+			pinMarker = " [*]"
 		}
 		gitMarker := ""
 		if g := m.gitMarkerStyled(doc.Path); g != "" {

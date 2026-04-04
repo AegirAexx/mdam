@@ -55,7 +55,7 @@ func buildDashItems(m Model) []dashItem {
 	items = append(items, dashItem{isBlank: true})
 
 	// Pinned.
-	items = append(items, dashItem{isHeader: true, label: "Pinned"})
+	items = append(items, dashItem{isHeader: true, label: "Pinned [*]"})
 	items = append(items, dashItem{isBlank: true})
 	var pinned []search.Result
 	for _, d := range m.docs {

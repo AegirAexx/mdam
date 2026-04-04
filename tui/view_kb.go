@@ -186,9 +186,16 @@ func (m Model) renderKBFilePanel(width, height int) string {
 				line = m.theme.FileNormal.Render(nameText) + countStr
 			}
 		} else {
-			itemText := "  " + truncate(row.label, width-3)
+			pinMarker := ""
+			if m.pinnedPaths[row.path] {
+				pinMarker = " [*]"
+			}
+			pinW := lipgloss.Width(pinMarker)
+			itemText := "  " + truncate(row.label, width-3-pinW) + pinMarker
 			if i == m.kbCursor && focused {
 				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+			} else if m.pinnedPaths[row.path] {
+				line = m.theme.FilePinned.Render(itemText)
 			} else {
 				line = m.theme.FileNormal.Render(itemText)
 			}

@@ -38,7 +38,7 @@ func TestBuildTagIndexCounts(t *testing.T) {
 	}
 }
 
-func TestBuildTagIndexSortedByCountDesc(t *testing.T) {
+func TestBuildTagIndexSortedAlphabetically(t *testing.T) {
 	docs := []search.Result{
 		{Path: "/a.md", Frontmatter: document.Frontmatter{Tags: []string{"rare"}}},
 		{Path: "/b.md", Frontmatter: document.Frontmatter{Tags: []string{"common", "rare"}}},
@@ -49,12 +49,16 @@ func TestBuildTagIndexSortedByCountDesc(t *testing.T) {
 	if len(entries) == 0 {
 		t.Fatal("no entries returned")
 	}
+	// "common" < "rare" alphabetically.
 	if entries[0].Name != "common" {
-		t.Errorf("first entry = %q, want 'common' (highest count)", entries[0].Name)
+		t.Errorf("first entry = %q, want 'common' (alphabetically first)", entries[0].Name)
+	}
+	if entries[1].Name != "rare" {
+		t.Errorf("second entry = %q, want 'rare'", entries[1].Name)
 	}
 }
 
-func TestBuildTagIndexAlphabeticTieBreak(t *testing.T) {
+func TestBuildTagIndexAlphabeticOrder(t *testing.T) {
 	docs := []search.Result{
 		{Path: "/a.md", Frontmatter: document.Frontmatter{Tags: []string{"zzz", "aaa"}}},
 	}
@@ -62,9 +66,9 @@ func TestBuildTagIndexAlphabeticTieBreak(t *testing.T) {
 	if len(entries) < 2 {
 		t.Fatal("expected 2 entries")
 	}
-	// Both have count 1; aaa should come before zzz alphabetically.
+	// aaa should come before zzz alphabetically.
 	if entries[0].Name != "aaa" {
-		t.Errorf("first entry with tie = %q, want aaa", entries[0].Name)
+		t.Errorf("first entry = %q, want aaa", entries[0].Name)
 	}
 }
 

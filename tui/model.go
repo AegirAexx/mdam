@@ -211,13 +211,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.errorMsg = fmt.Sprintf("scan error: %v", msg.err)
-		} else {
-			m.docs = msg.docs
-			m.errorMsg = ""
-			// Load templates while we're at it.
-			m.templates, _ = tmpl.Discover(m.cfg.TemplatesDir())
+			return m, nil
 		}
-		return m, nil
+		m.docs = msg.docs
+		m.errorMsg = ""
+		// Load templates while we're at it.
+		m.templates, _ = tmpl.Discover(m.cfg.TemplatesDir())
+		// Rebuild tag index so ViewTags is always current regardless of how it is reached.
+		return m, cmdBuildTagIndex(msg.docs)
 
 	case todosLoadedMsg:
 		if msg.err == nil {
@@ -385,7 +386,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
 
-	// Journal tree: l/h expand-collapse folders or switch panel
+	// Journal tree: l/h expand-collapse folders only (focus never leaves left panel).
 	case (k == "l" || k == "right") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
 		rows := buildJournalRows(m.docs, m.journalExpanded)
 		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
@@ -395,16 +396,22 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				delete(m.journalExpanded, k2)
 			}
 			m.journalExpanded[key] = true
-		} else {
-			m.activePanel = m.activePanel.next()
 		}
+		// File row: l is a no-op (already inside an open folder).
 	case (k == "h" || k == "left") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
 		rows := buildJournalRows(m.docs, m.journalExpanded)
 		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
 			// Collapse this folder.
 			delete(m.journalExpanded, rows[m.journalCursor].month)
 		} else {
-			m.activePanel = m.activePanel.prev()
+			// File row: collapse parent month folder and jump cursor to it.
+			for i := m.journalCursor - 1; i >= 0; i-- {
+				if rows[i].isFolder {
+					delete(m.journalExpanded, rows[i].month)
+					m.journalCursor = i
+					break
+				}
+			}
 		}
 
 	// Dashboard: l/h switch between left and right columns
@@ -413,7 +420,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case (k == "h" || k == "left") && m.activeView == ViewDashboard:
 		m.dashRight = false
 
-	// KB tree: l/h expand-collapse folders or switch panel
+	// KB tree: l/h expand-collapse folders only (focus never leaves left panel).
 	case (k == "l" || k == "right") && m.activeView == ViewKB && m.activePanel == PanelFiles:
 		rows := buildKBRows(m.docs, m.kbExpanded)
 		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
@@ -422,16 +429,28 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				delete(m.kbExpanded, k2)
 			}
 			m.kbExpanded[key] = true
-		} else {
-			m.activePanel = m.activePanel.next()
 		}
+		// File row: l is a no-op (already inside an open folder).
 	case (k == "h" || k == "left") && m.activeView == ViewKB && m.activePanel == PanelFiles:
 		rows := buildKBRows(m.docs, m.kbExpanded)
 		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
 			delete(m.kbExpanded, rows[m.kbCursor].subtype)
 		} else {
-			m.activePanel = m.activePanel.prev()
+			// File row: collapse parent subtype folder and jump cursor to it.
+			for i := m.kbCursor - 1; i >= 0; i-- {
+				if rows[i].isFolder {
+					delete(m.kbExpanded, rows[i].subtype)
+					m.kbCursor = i
+					break
+				}
+			}
 		}
+
+	// Tag Browser: l/h move focus between panels without wrapping.
+	case (k == "l" || k == "right") && m.activeView == ViewTags:
+		m.activePanel = PanelPreview
+	case (k == "h" || k == "left") && m.activeView == ViewTags:
+		m.activePanel = PanelFiles
 
 	// Panel navigation (h/l move focus between panels)
 	case k == "l", k == "right":
@@ -581,6 +600,25 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Open in full-screen read mode
 	case k == "o":
+		// Tag Browser: o on doc panel opens the highlighted tagged doc in read mode.
+		if m.activeView == ViewTags && m.activePanel == PanelPreview {
+			tagged := m.taggedDocs()
+			if m.tagDocCursor < len(tagged) {
+				d := tagged[m.tagDocCursor]
+				title := d.Frontmatter.Title
+				if title == "" {
+					title = filepath.Base(d.Path)
+				}
+				m.readReturnView = m.activeView
+				m.readReturnPanel = m.activePanel
+				m.readDocTitle = title
+				m.readViewport = viewport.New(m.width, m.height-3)
+				m.mode = ModeRead
+				return m, cmdLoadRead(d.Path, m.theme.GlamourStyle, m.width)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
 		// Dashboard: o on left column file item enters read mode.
 		if m.activeView == ViewDashboard && !m.dashRight {
 			items := buildDashItems(m)
@@ -673,7 +711,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Fire preview load when cursor moves in file panel.
 	if m.activePanel == PanelFiles {
 		if selected := m.selectedDoc(); selected != "" {
-			return m, cmdLoadPreview(selected, m.theme.GlamourStyle, m.preview.Width)
+			switch m.activeView {
+			case ViewJournal, ViewKB:
+				return m, cmdLoadPreviewDoc(selected, m.theme.GlamourStyle, m.preview.Width)
+			default:
+				return m, cmdLoadPreview(selected, m.theme.GlamourStyle, m.preview.Width)
+			}
 		}
 	}
 
