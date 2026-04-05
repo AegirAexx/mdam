@@ -118,6 +118,21 @@ func initJournalView(m Model) Model {
 	for i, r := range rows {
 		if !r.isFolder {
 			m.journalCursor = i
+			return m
+		}
+	}
+	// Current month has no entries. Expand the most recent past-month folder
+	// that has files so the cursor lands on a document rather than a folder.
+	for _, r := range rows {
+		if r.isFolder && !m.journalExpanded[r.month] {
+			m.journalExpanded[r.month] = true
+			rows = buildJournalRows(m.docs, m.journalExpanded)
+			for i, row := range rows {
+				if !row.isFolder {
+					m.journalCursor = i
+					break
+				}
+			}
 			break
 		}
 	}

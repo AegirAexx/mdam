@@ -134,7 +134,6 @@ func (m Model) renderDashLeft(width, height int) string {
 	lines = append(lines, header)
 
 	items := buildDashItems(m)
-	today := time.Now().Format("2006-01-02")
 
 	visibleRows := height - 2
 	start := 0
@@ -155,11 +154,7 @@ func (m Model) renderDashLeft(width, height int) string {
 				m.theme.Muted.Render(truncate(it.label, width-2)),
 			)
 		default:
-			var prefix string
-			if strings.Contains(it.doc.Path, today) {
-				prefix = m.icons.Pinned + " "
-			}
-			itemText := " " + prefix + truncate(it.label, width-2-len(prefix))
+			itemText := " " + truncate(it.label, width-2)
 			if i == m.dashCursor && !m.dashRight {
 				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
 			} else {

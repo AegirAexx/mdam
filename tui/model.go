@@ -215,8 +215,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.docs = msg.docs
 		m.errorMsg = ""
+		if msg.skipCount > 0 {
+			m.statusMsg = fmt.Sprintf("%d file(s) skipped — invalid frontmatter", msg.skipCount)
+		}
 		// Load templates while we're at it.
 		m.templates, _ = tmpl.Discover(m.cfg.TemplatesDir())
+		// Re-initialise the journal view so cursor repositions to the newest entry.
+		if m.activeView == ViewJournal {
+			m = initJournalView(m)
+		}
 		// Rebuild tag index so ViewTags is always current regardless of how it is reached.
 		return m, cmdBuildTagIndex(msg.docs)
 
@@ -488,6 +495,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchActive = false
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
+		m.preview.SetContent("") // clear stale content from previous view
 		m = initJournalView(m)
 	case k == "3":
 		m.activeView = ViewKB
@@ -495,6 +503,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.kbCursor = 0
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
+		m.preview.SetContent("") // clear stale content from previous view
 	case k == "4":
 		m.activeView = ViewTags
 		m.searchActive = false

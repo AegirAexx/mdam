@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -79,30 +80,46 @@ func Find(dir, name string) (Template, error) {
 	return Template{}, fmt.Errorf("template %q not found in %s", name, dir)
 }
 
-// Render interpolates variables in a template's content and returns the result.
-// vars is a map of variable name (without braces) to value.
-// Builtin variables (date, date_short) are resolved automatically.
-// Any unresolved variables in the rendered output are returned as-is —
-// the caller is responsible for prompting the user for missing values.
-func Render(t Template, vars map[string]string) (string, error) {
-	now := time.Now()
-	content := t.Content
+// dateFormatRe matches {{date:FORMAT}} placeholders.
+var dateFormatRe = regexp.MustCompile(`\{\{date:([^}]+)\}\}`)
 
-	// Resolve caller-supplied variables first so they take precedence over built-ins.
+// renderContent applies variable substitution to raw template content.
+// Caller-supplied vars are applied first (highest precedence), then
+// {{date:FORMAT}} patterns using Go's time layout syntax, then the
+// fixed built-ins {{date}} and {{date_short}}.
+func renderContent(content string, vars map[string]string, now time.Time) string {
+	// 1. Caller-supplied variables take precedence over all built-ins.
 	for k, v := range vars {
 		content = strings.ReplaceAll(content, "{{"+k+"}}", v)
 	}
+	// 2. Parameterised date: {{date:FORMAT}} where FORMAT is a Go time layout.
+	content = dateFormatRe.ReplaceAllStringFunc(content, func(m string) string {
+		sub := dateFormatRe.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		return now.Format(sub[1])
+	})
+	// 3. Fixed built-ins for backwards compatibility.
+	content = strings.ReplaceAll(content, "{{date}}", now.UTC().Format(time.RFC3339))
+	content = strings.ReplaceAll(content, "{{date_short}}", now.Format("2006-01-02"))
+	return content
+}
 
-	// Resolve built-in variables for any remaining unresolved placeholders.
-	builtins := map[string]string{
-		"date":       now.UTC().Format(time.RFC3339),
-		"date_short": now.Format("2006-01-02"),
-	}
-	for k, v := range builtins {
-		content = strings.ReplaceAll(content, "{{"+k+"}}", v)
-	}
+// Render interpolates variables in a template's content and returns the result.
+// vars is a map of variable name (without braces) to value.
+// Built-in variables (date, date_short, date:FORMAT) are resolved automatically.
+// Any unresolved variables in the rendered output are returned as-is —
+// the caller is responsible for prompting the user for missing values.
+func Render(t Template, vars map[string]string) (string, error) {
+	return RenderAt(t, vars, time.Now())
+}
 
-	return content, nil
+// RenderAt is like Render but uses now as the reference time for all date
+// variables. Use this when the document date differs from the current time
+// (e.g. backdated journal entries).
+func RenderAt(t Template, vars map[string]string, now time.Time) (string, error) {
+	return renderContent(t.Content, vars, now), nil
 }
 
 // TemplateType extracts the value of the "type:" field from the frontmatter
@@ -150,16 +167,19 @@ func BuiltinTemplates() map[string]string {
 	}
 }
 
-// WriteBuiltins writes built-in templates to the given directory, skipping any
-// that already exist.
+// WriteBuiltins writes built-in templates to the given directory. An existing
+// file is overwritten only when its content differs from the current built-in,
+// so user-customised templates that match the built-in are left alone and
+// stale copies from older versions are updated automatically.
 func WriteBuiltins(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating templates directory: %w", err)
 	}
 	for name, content := range BuiltinTemplates() {
 		path := filepath.Join(dir, name+".md")
-		if _, err := os.Stat(path); err == nil {
-			continue // already exists
+		existing, err := os.ReadFile(path)
+		if err == nil && string(existing) == content {
+			continue // already up-to-date
 		}
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("writing template %s: %w", name, err)
@@ -170,13 +190,13 @@ func WriteBuiltins(dir string) error {
 
 var journalTemplate = `---
 type: journal
-title: {{date_short}}
+title: {{date:Monday - January 02 2006}}
 tags: []
 created: {{date_short}}
 modified: {{date_short}}
 ---
 
-# Journal — {{date_short}}
+# {{date:Monday - January 02 2006}}
 
 ## Notes
 

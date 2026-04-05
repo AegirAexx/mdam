@@ -23,8 +23,8 @@ import (
 // cmdLoadDocs scans baseDir for all managed markdown documents.
 func cmdLoadDocs(baseDir string) tea.Cmd {
 	return func() tea.Msg {
-		docs, err := search.ListAll(baseDir)
-		return docsLoadedMsg{docs: docs, err: err}
+		docs, skipped, err := search.ListAll(baseDir)
+		return docsLoadedMsg{docs: docs, skipCount: skipped, err: err}
 	}
 }
 

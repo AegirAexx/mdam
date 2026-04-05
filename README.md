@@ -58,7 +58,7 @@ mdam import ~/notes.md    # Import a markdown file
 ### TUI layout
 
 ```
- Dashboard   Journal   KB   Tag Browser
+ 1: Dashboard   2: Journal   3: KB   4: Tag Browser
 ▶ Overview ─────────────────│─ Preview ──────────────────────────
  Journal                    │  Journal 2026-04-03
  2026-04-03                 │
@@ -129,7 +129,7 @@ journal:
 | Knowledge base | Subtype folders derived from `kb_*` type prefix (e.g. `kb_summary` → Summary folder) |
 | TODO system | Task backlog with category, priority, and date fields; sweep from journal entries |
 | Scratch pad | Persistent singleton, one keypress away (`s`) |
-| Templates | User-extensible scaffolding; add `.md` files to `{base_dir}/.templates/` |
+| Templates | User-extensible scaffolding with date formatting (`{{date:FORMAT}}`); add `.md` files to `{base_dir}/.templates/` |
 | Fuzzy search | Across frontmatter fields, filenames, and document bodies |
 | Export | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
 | Git integration | Per-file status markers (modified / untracked) in the file panel |

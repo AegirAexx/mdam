@@ -1188,9 +1188,11 @@ func TestViewShowsFileNames(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	m.activeView = ViewJournal
+	// Expand the month that contains the test documents so filenames are visible.
+	m.journalExpanded = map[string]bool{"2026-03": true}
 	view := stripANSI(m.View())
-	if !strings.Contains(view, "2026-03-14.md") {
-		t.Errorf("view should contain filename '2026-03-14.md':\n%s", view)
+	if !strings.Contains(view, "2026-03-14") {
+		t.Errorf("view should contain filename '2026-03-14':\n%s", view)
 	}
 }
 

@@ -90,7 +90,7 @@ func renderJournalTemplate(tmplDir string, date time.Time) (string, error) {
 		tmpl = template.Template{Name: "journal", Content: content}
 	}
 
-	return template.Render(tmpl, vars)
+	return template.RenderAt(tmpl, vars, date)
 }
 
 // List returns all journal entry paths in journalDir, sorted newest-first.

@@ -28,16 +28,16 @@ func (m Model) renderTabBar() string {
 		label string
 	}
 	tabs := []tabDef{
-		{ViewDashboard, "Dashboard"},
-		{ViewJournal, "Journal"},
-		{ViewKB, "KB"},
-		{ViewTags, "Tag Browser"},
+		{ViewDashboard, "1: Dashboard"},
+		{ViewJournal, "2: Journal"},
+		{ViewKB, "3: KB"},
+		{ViewTags, "4: Tag Browser"},
 	}
 
 	var parts []string
 	for _, t := range tabs {
 		if m.activeView == t.view {
-			parts = append(parts, m.theme.Accent.Padding(0, 1).Render(t.label))
+			parts = append(parts, lipgloss.NewStyle().Reverse(true).Padding(0, 1).Render(t.label))
 		} else {
 			parts = append(parts, m.theme.Subtle.Padding(0, 1).Render(t.label))
 		}
@@ -205,6 +205,47 @@ func (m Model) renderFilePanel(width, height int) string {
 func (m Model) renderPreviewPanel(width, height int) string {
 	focused := m.activePanel == PanelPreview
 
+	viewportAvail := height - 1 // minus panel header
+	if viewportAvail < 2 {
+		viewportAvail = 2
+	}
+
+	// For tree views (Journal/KB), use the pane-specific selected path.
+	if m.activeView == ViewJournal || m.activeView == ViewKB {
+		selectedPath := m.selectedDoc()
+		panelTitle := "Preview"
+		if selectedPath != "" {
+			for _, d := range m.docs {
+				if d.Path == selectedPath {
+					if d.Frontmatter.Title != "" {
+						panelTitle = d.Frontmatter.Title
+					}
+					break
+				}
+			}
+		}
+		title := styledPanelHeader(panelTitle, focused, width, m.theme, m.icons)
+		var lines []string
+		lines = append(lines, title)
+		if selectedPath == "" {
+			lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+				m.theme.Muted.Render("Select a document to preview."),
+			))
+			return strings.Join(lines, "\n")
+		}
+		if m.preview.Width > 0 && m.preview.TotalLineCount() > 0 {
+			vpLines := strings.Split(m.preview.View(), "\n")
+			for i, l := range vpLines {
+				if i >= viewportAvail {
+					break
+				}
+				lines = append(lines, l)
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	// ViewAll / ViewRecent: use fileCursor into visibleDocs.
 	docs := m.visibleDocs()
 	panelTitle := "Preview"
 	if m.fileCursor < len(docs) {
@@ -216,11 +257,6 @@ func (m Model) renderPreviewPanel(width, height int) string {
 
 	var lines []string
 	lines = append(lines, title)
-
-	viewportAvail := height - 1 // minus panel header
-	if viewportAvail < 2 {
-		viewportAvail = 2
-	}
 
 	if m.fileCursor >= len(docs) {
 		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
@@ -346,7 +382,7 @@ func (m Model) viewTemplatePicker() string {
 	b.WriteString("\n\n")
 	for i, t := range m.pickerTemplates {
 		if i == m.pickerCursor {
-			b.WriteString(m.theme.FileCursor.Render(fmt.Sprintf("  %s%-12s", m.icons.CursorSel, t.Name)))
+			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(fmt.Sprintf("  %-14s", t.Name)))
 		} else {
 			b.WriteString(m.theme.FileNormal.Render(fmt.Sprintf("  %-14s", t.Name)))
 		}

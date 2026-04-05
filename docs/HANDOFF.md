@@ -6,37 +6,43 @@ mdam (Markdown Admin Management) is a keyboard-driven terminal TUI for managing 
 
 ---
 
-## Session 03 — COMPLETE
+## Session 04 — COMPLETE
 
-TUI-UX compliance refactoring pass. All 13 gaps between the existing implementation and `docs/TUI-UX.md` have been addressed. All tests pass (`go test ./...` and `go vet ./...` both green).
+Second UX/UI refactoring pass covering navigation, preview, templates, and polish.
 
-### What was done
+### Changes
 
-| Gap | Description | Status |
-|----|-------------|--------|
-| 1 | Theme: Added `Accent`, `Subtle`, `Muted`, `Warning` semantic fields to all 5 palettes | DONE |
-| 2 | Tab bar: Changed `TabActive` from `Reverse(true)` to `Bold+Accent fg` per §3.3 | DONE |
-| 3 | Read mode: Added document title header; footer now uses `renderStatusBar()` showing `READ` | DONE |
-| 4 | Preview panel: Dynamic title from `Frontmatter.Title`; empty state "Select a document to preview." | DONE |
-| 5 | Help overlay: Centered box with `RoundedBorder` in Accent color via `lipgloss.Place` | DONE |
-| 6 | Status bar hints: Tightened to `/  :  o:read  ?  q` using `m.theme.Muted` | DONE |
-| 7 | Delete confirm: Status bar right zone shows `Delete "title"? (y/n)` in Warning color | DONE |
-| 8 | Dashboard: Blank rows between sections; per-section empty states (§2.2/2.3/5) | DONE |
-| 9 | Dashboard TODOs: Priority-grouped display (!high→!medium→!low→unprioritised) | DONE |
-| 10 | Journal folders: `[N]` count in Subtle style outside Reverse block; YYYY-MM labels | DONE |
-| 11 | KB folders: Same count treatment as journal | DONE |
-| 12 | Tags: Hardcoded focused=true bug fixed; all empty states use Muted + spec text | DONE |
-| 13 | Model: Added `readDocTitle`/`deleteConfirmTitle` fields; cursor skips blanks/placeholders | DONE |
+| Area | Description |
+|------|-------------|
+| h/l tree navigation | Journal (2) and KB (3): h collapses folder (or parent if on file row), l expands folder (no-op on file row). Panes 1/4 unchanged. |
+| Journal/KB preview | Strips YAML frontmatter; shows tags line + glamour-rendered body |
+| `{{date:FORMAT}}` templates | Parameterised date via Go time layout strings; `template.RenderAt(t, vars, now)` for backdating |
+| Stale preview fix | `m.preview.SetContent("")` on view switch to Journal/KB |
+| Journal cursor fallback | `initJournalView` expands most recent past-month when current month is empty |
+| Scan error surfacing | `search.ListAll` returns skip count; shown in status bar |
+| `WriteBuiltins` overwrite | Stale on-disk templates overwritten when content differs from built-in |
+| Pin indicators | `[*]` marker on pinned docs in all file lists |
+| Create doc cursor | `viewTemplatePicker` selected item uses `Reverse(true)` |
+| Dashboard alignment | Removed today-prefix `[*]` — all rows aligned |
+| Tab bar | Labels now `1: Dashboard`, `2: Journal`, `3: KB`, `4: Tag Browser`; active uses `Reverse(true)` |
+| KB/Journal preview placeholder | Shows "Select a document to preview." when cursor on folder |
 
 ### Files modified
-- `tui/theme.go` — Accent/Subtle/Muted/Warning fields + TabActive updated in all 5 palettes
-- `tui/model.go` — 2 new fields, `selectedDocTitle()` helper, o/d handlers updated, cursor skip logic
-- `tui/view.go` — Tab bar, read mode, preview title, status bar, viewHelp box
-- `tui/view_dashboard.go` — isBlank/isPlaceholder on dashItem, section structure, priority TODOs
-- `tui/view_journal.go` — icon/count fields on journalRow, YYYY-MM folder labels, empty state
-- `tui/view_kb.go` — icon/count fields on kbRow, empty state
-- `tui/view_tags.go` — focused bug fix, Muted empty states
-- `tui/model_test.go` — TestBuildDashItems updated to skip blank/placeholder rows
+- `tui/model.go` — view-switch preview clear, h/l tree nav, docsLoadedMsg re-init
+- `tui/view.go` — tab bar labels+style, template picker cursor, preview panel tree-view branch
+- `tui/view_dashboard.go` — removed today-prefix
+- `tui/view_journal.go` — initJournalView fallback to past month
+- `tui/view_kb.go` — h/l tree navigation matching journal
+- `tui/commands.go` — cmdLoadPreviewDoc strips frontmatter; cmdLoadDocs captures skipCount
+- `internal/search/search.go` — ListAll returns skip count
+- `internal/template/template.go` — RenderAt, dateFormatRe, WriteBuiltins content-diff overwrite
+- `internal/journal/journal.go` — uses template.RenderAt for backdating
+- `tui/model_test.go` — updated for new signatures and journal view setup
+- `docs/KEYBINDINGS.md` — h/l behaviour for journal/KB updated
+- `docs/FRONTMATTER.md` — template variables and `{{date:FORMAT}}` reference
+- `README.md` — tab bar ASCII art updated, template feature description
+
+All tests pass: `go test ./...` and `go vet ./...` green.
 
 ---
 
@@ -44,14 +50,14 @@ TUI-UX compliance refactoring pass. All 13 gaps between the existing implementat
 
 Branch `fix/ui-ux-refactoring` is ready for review and PR to master.
 
-After merge, manual smoke test all 4 panes with real document data:
-1. **Dashboard** — verify blank lines between sections; Journal/Pinned/Recent placeholders when empty; TODO priority groups
-2. **Journal** — verify YYYY-MM folder labels with `[N]` counts; empty state text
-3. **KB** — verify subtype folder labels with `[N]` counts; empty state text
-4. **Tag Browser** — verify focus resets to Tags on entry; empty state texts; Documents panel focus bug fixed
-5. **Read mode** — verify document title header at top; READ mode in status bar; `q` closes properly
-6. **Help** — verify centered bordered box with Accent color
-7. **Delete** — verify `Delete "title"? (y/n)` in Warning color in status bar
+Manual smoke test checklist:
+1. **Tab bar** — numbered labels (`1: Dashboard` etc.); active tab inverted
+2. **Create doc screen** (`n`) — selected item inverted, no cursor icon
+3. **Dashboard** — all items aligned (no stray `[*]` prefix)
+4. **Journal pane (2)** — preview blank until file row selected; h collapses parent folder from file row
+5. **KB pane (3)** — placeholder when cursor on folder; correct title on file row
+6. **Templates** — `{{date:FORMAT}}` works (e.g. `{{date:Monday - January 02 2006}}`)
+7. **Status bar** — shows skip count if any files fail to parse
 
 ---
 
