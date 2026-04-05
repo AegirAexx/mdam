@@ -30,9 +30,6 @@ func buildTagIndex(docs []search.Result) []tagEntry {
 		entries = append(entries, tagEntry{Name: name, Count: count})
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Count != entries[j].Count {
-			return entries[i].Count > entries[j].Count
-		}
 		return entries[i].Name < entries[j].Name
 	})
 	return entries
@@ -81,12 +78,15 @@ func (m Model) renderTagBrowser() string {
 
 // renderTagPanel renders the list of tags in the left panel.
 func (m Model) renderTagPanel(width, height int) string {
-	header := styledPanelHeader("Tags", true, width, m.theme, m.icons)
+	tagFocused := m.activePanel == PanelFiles
+	header := styledPanelHeader("Tags", tagFocused, width, m.theme, m.icons)
 	var lines []string
 	lines = append(lines, header)
 
 	if len(m.tagEntries) == 0 {
-		lines = append(lines, "  (no tags)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No tags found."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
@@ -96,7 +96,6 @@ func (m Model) renderTagPanel(width, height int) string {
 		start = m.tagCursor - visibleRows + 1
 	}
 
-	tagFocused := m.activePanel == PanelFiles
 	for i := start; i < len(m.tagEntries) && len(lines) < height-1; i++ {
 		te := m.tagEntries[i]
 		tagName := m.icons.Tag + te.Name
@@ -121,14 +120,18 @@ func (m Model) renderTagDocPanel(width, height int) string {
 	lines = append(lines, header)
 
 	if m.tagCursor >= len(m.tagEntries) {
-		lines = append(lines, "  (select a tag)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("Select a tag to see documents."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
 	tagged := m.taggedDocs()
 
 	if len(tagged) == 0 {
-		lines = append(lines, "  (no documents)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("Select a tag to see documents."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
@@ -136,10 +139,17 @@ func (m Model) renderTagDocPanel(width, height int) string {
 		if len(lines) >= height-1 {
 			break
 		}
-		itemText := " " + truncate(d.Frontmatter.Title, width-2)
+		pinMarker := ""
+		if m.pinnedPaths[d.Path] {
+			pinMarker = " [*]"
+		}
+		pinW := lipgloss.Width(pinMarker)
+		itemText := " " + truncate(d.Frontmatter.Title, width-2-pinW) + pinMarker
 		var line string
 		if i == m.tagDocCursor && docFocused {
 			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+		} else if m.pinnedPaths[d.Path] {
+			line = m.theme.FilePinned.Render(itemText)
 		} else {
 			line = m.theme.FileNormal.Render(itemText)
 		}

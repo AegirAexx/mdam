@@ -75,7 +75,8 @@ type Model struct {
 	pinnedPaths map[string]bool // set of pinned absolute paths
 
 	// --- Delete confirmation ---
-	deleteConfirmPath string
+	deleteConfirmPath  string
+	deleteConfirmTitle string // document title shown in delete confirm prompt (§7.1)
 
 	// --- Journal tree ---
 	journalExpanded map[string]bool // month key ("2026-04") → expanded
@@ -89,6 +90,7 @@ type Model struct {
 	readViewport    viewport.Model
 	readReturnView  View
 	readReturnPanel PanelID
+	readDocTitle    string // document title shown in read mode header (§3.5)
 
 	// --- Dashboard ---
 	dashCursor int  // index into flat dashItem list
@@ -209,13 +211,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.errorMsg = fmt.Sprintf("scan error: %v", msg.err)
-		} else {
-			m.docs = msg.docs
-			m.errorMsg = ""
-			// Load templates while we're at it.
-			m.templates, _ = tmpl.Discover(m.cfg.TemplatesDir())
+			return m, nil
 		}
-		return m, nil
+		m.docs = msg.docs
+		m.errorMsg = ""
+		if msg.skipCount > 0 {
+			m.statusMsg = fmt.Sprintf("%d file(s) skipped — invalid frontmatter", msg.skipCount)
+		}
+		// Load templates while we're at it.
+		m.templates, _ = tmpl.Discover(m.cfg.TemplatesDir())
+		// Re-initialise the journal view so cursor repositions to the newest entry.
+		if m.activeView == ViewJournal {
+			m = initJournalView(m)
+		}
+		// Rebuild tag index so ViewTags is always current regardless of how it is reached.
+		return m, cmdBuildTagIndex(msg.docs)
 
 	case todosLoadedMsg:
 		if msg.err == nil {
@@ -383,7 +393,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
 
-	// Journal tree: l/h expand-collapse folders or switch panel
+	// Journal tree: l/h expand-collapse folders only (focus never leaves left panel).
 	case (k == "l" || k == "right") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
 		rows := buildJournalRows(m.docs, m.journalExpanded)
 		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
@@ -393,16 +403,22 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				delete(m.journalExpanded, k2)
 			}
 			m.journalExpanded[key] = true
-		} else {
-			m.activePanel = m.activePanel.next()
 		}
+		// File row: l is a no-op (already inside an open folder).
 	case (k == "h" || k == "left") && m.activeView == ViewJournal && m.activePanel == PanelFiles:
 		rows := buildJournalRows(m.docs, m.journalExpanded)
 		if m.journalCursor < len(rows) && rows[m.journalCursor].isFolder {
 			// Collapse this folder.
 			delete(m.journalExpanded, rows[m.journalCursor].month)
 		} else {
-			m.activePanel = m.activePanel.prev()
+			// File row: collapse parent month folder and jump cursor to it.
+			for i := m.journalCursor - 1; i >= 0; i-- {
+				if rows[i].isFolder {
+					delete(m.journalExpanded, rows[i].month)
+					m.journalCursor = i
+					break
+				}
+			}
 		}
 
 	// Dashboard: l/h switch between left and right columns
@@ -411,7 +427,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case (k == "h" || k == "left") && m.activeView == ViewDashboard:
 		m.dashRight = false
 
-	// KB tree: l/h expand-collapse folders or switch panel
+	// KB tree: l/h expand-collapse folders only (focus never leaves left panel).
 	case (k == "l" || k == "right") && m.activeView == ViewKB && m.activePanel == PanelFiles:
 		rows := buildKBRows(m.docs, m.kbExpanded)
 		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
@@ -420,16 +436,28 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				delete(m.kbExpanded, k2)
 			}
 			m.kbExpanded[key] = true
-		} else {
-			m.activePanel = m.activePanel.next()
 		}
+		// File row: l is a no-op (already inside an open folder).
 	case (k == "h" || k == "left") && m.activeView == ViewKB && m.activePanel == PanelFiles:
 		rows := buildKBRows(m.docs, m.kbExpanded)
 		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
 			delete(m.kbExpanded, rows[m.kbCursor].subtype)
 		} else {
-			m.activePanel = m.activePanel.prev()
+			// File row: collapse parent subtype folder and jump cursor to it.
+			for i := m.kbCursor - 1; i >= 0; i-- {
+				if rows[i].isFolder {
+					delete(m.kbExpanded, rows[i].subtype)
+					m.kbCursor = i
+					break
+				}
+			}
 		}
+
+	// Tag Browser: l/h move focus between panels without wrapping.
+	case (k == "l" || k == "right") && m.activeView == ViewTags:
+		m.activePanel = PanelPreview
+	case (k == "h" || k == "left") && m.activeView == ViewTags:
+		m.activePanel = PanelFiles
 
 	// Panel navigation (h/l move focus between panels)
 	case k == "l", k == "right":
@@ -467,6 +495,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchActive = false
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
+		m.preview.SetContent("") // clear stale content from previous view
 		m = initJournalView(m)
 	case k == "3":
 		m.activeView = ViewKB
@@ -474,6 +503,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.kbCursor = 0
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
+		m.preview.SetContent("") // clear stale content from previous view
 	case k == "4":
 		m.activeView = ViewTags
 		m.searchActive = false
@@ -579,14 +609,39 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Open in full-screen read mode
 	case k == "o":
+		// Tag Browser: o on doc panel opens the highlighted tagged doc in read mode.
+		if m.activeView == ViewTags && m.activePanel == PanelPreview {
+			tagged := m.taggedDocs()
+			if m.tagDocCursor < len(tagged) {
+				d := tagged[m.tagDocCursor]
+				title := d.Frontmatter.Title
+				if title == "" {
+					title = filepath.Base(d.Path)
+				}
+				m.readReturnView = m.activeView
+				m.readReturnPanel = m.activePanel
+				m.readDocTitle = title
+				m.readViewport = viewport.New(m.width, m.height-3)
+				m.mode = ModeRead
+				return m, cmdLoadRead(d.Path, m.theme.GlamourStyle, m.width)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
 		// Dashboard: o on left column file item enters read mode.
 		if m.activeView == ViewDashboard && !m.dashRight {
 			items := buildDashItems(m)
-			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
-				path := items[m.dashCursor].doc.Path
+			if m.dashCursor < len(items) && !items[m.dashCursor].isHeader && !items[m.dashCursor].isBlank && !items[m.dashCursor].isPlaceholder {
+				it := items[m.dashCursor]
+				path := it.doc.Path
+				title := it.doc.Frontmatter.Title
+				if title == "" {
+					title = filepath.Base(path)
+				}
 				m.readReturnView = m.activeView
 				m.readReturnPanel = m.activePanel
-				m.readViewport = viewport.New(m.width, m.height-1)
+				m.readDocTitle = title
+				m.readViewport = viewport.New(m.width, m.height-3)
 				m.mode = ModeRead
 				return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 			}
@@ -596,7 +651,8 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if path := m.selectedDoc(); path != "" {
 			m.readReturnView = m.activeView
 			m.readReturnPanel = m.activePanel
-			m.readViewport = viewport.New(m.width, m.height-1)
+			m.readDocTitle = m.selectedDocTitle()
+			m.readViewport = viewport.New(m.width, m.height-3)
 			m.mode = ModeRead
 			return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 		}
@@ -651,7 +707,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if selected := m.selectedDoc(); selected != "" {
 			m.mode = ModeDeleteConfirm
 			m.deleteConfirmPath = selected
-			m.statusMsg = fmt.Sprintf("Delete %s? (y/n)", filepath.Base(selected))
+			m.deleteConfirmTitle = m.selectedDocTitle()
+			if m.deleteConfirmTitle == "" {
+				m.deleteConfirmTitle = filepath.Base(selected)
+			}
 		} else {
 			m.statusMsg = "no document selected"
 		}
@@ -661,7 +720,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Fire preview load when cursor moves in file panel.
 	if m.activePanel == PanelFiles {
 		if selected := m.selectedDoc(); selected != "" {
-			return m, cmdLoadPreview(selected, m.theme.GlamourStyle, m.preview.Width)
+			switch m.activeView {
+			case ViewJournal, ViewKB:
+				return m, cmdLoadPreviewDoc(selected, m.theme.GlamourStyle, m.preview.Width)
+			default:
+				return m, cmdLoadPreview(selected, m.theme.GlamourStyle, m.preview.Width)
+			}
 		}
 	}
 
@@ -674,10 +738,12 @@ func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y":
 		m.mode = ModeNormal
 		m.statusMsg = ""
+		m.deleteConfirmTitle = ""
 		return m, cmdDeleteDoc(m.deleteConfirmPath)
 	case "n", "esc":
 		m.mode = ModeNormal
 		m.deleteConfirmPath = ""
+		m.deleteConfirmTitle = ""
 		m.statusMsg = ""
 		return m, nil
 	case "ctrl+c":
@@ -894,6 +960,50 @@ func (m Model) selectedDoc() string {
 	return ""
 }
 
+// selectedDocTitle returns the frontmatter title of the document under the cursor,
+// falling back to the base filename if the title is empty.
+func (m Model) selectedDocTitle() string {
+	var path string
+	var title string
+	if m.activeView == ViewJournal {
+		path = m.journalSelectedPath()
+		rows := buildJournalRows(filterByType(m.docs, "journal"), m.journalExpanded)
+		if m.journalCursor >= 0 && m.journalCursor < len(rows) {
+			r := rows[m.journalCursor]
+			if !r.isFolder {
+				for _, d := range m.docs {
+					if d.Path == r.path {
+						title = d.Frontmatter.Title
+						break
+					}
+				}
+			}
+		}
+	} else if m.activeView == ViewKB {
+		path = m.kbSelectedPath()
+		rows := buildKBRows(m.docs, m.kbExpanded)
+		if m.kbCursor >= 0 && m.kbCursor < len(rows) {
+			r := rows[m.kbCursor]
+			if !r.isFolder {
+				title = r.title
+			}
+		}
+	} else {
+		docs := m.visibleDocs()
+		if m.fileCursor >= 0 && m.fileCursor < len(docs) {
+			path = docs[m.fileCursor].Path
+			title = docs[m.fileCursor].Frontmatter.Title
+		}
+	}
+	if title != "" {
+		return title
+	}
+	if path != "" {
+		return filepath.Base(path)
+	}
+	return ""
+}
+
 // visibleDocs returns the slice of documents appropriate for the current view.
 func (m Model) visibleDocs() []search.Result {
 	if m.searchActive {
@@ -934,8 +1044,11 @@ func highlightedRelPath(m Model) string {
 	switch {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
-		if m.dashCursor < len(items) && !items[m.dashCursor].isHeader {
-			absPath = items[m.dashCursor].doc.Path
+		if m.dashCursor < len(items) {
+			it := items[m.dashCursor]
+			if !it.isHeader && !it.isBlank && !it.isPlaceholder {
+				absPath = it.doc.Path
+			}
 		}
 	case m.activeView == ViewJournal:
 		absPath = m.journalSelectedPath()
@@ -1011,7 +1124,7 @@ func (m Model) moveCursorDown() Model {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		next := m.dashCursor + 1
-		for next < len(items) && items[next].isHeader {
+		for next < len(items) && (items[next].isHeader || items[next].isBlank || items[next].isPlaceholder) {
 			next++
 		}
 		if next < len(items) {
@@ -1053,7 +1166,7 @@ func (m Model) moveCursorUp() Model {
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		prev := m.dashCursor - 1
-		for prev >= 0 && items[prev].isHeader {
+		for prev >= 0 && (items[prev].isHeader || items[prev].isBlank || items[prev].isPlaceholder) {
 			prev--
 		}
 		if prev >= 0 {
@@ -1088,10 +1201,10 @@ func (m Model) jumpTop() Model {
 	if m.activePanel == PanelFiles {
 		switch m.activeView {
 		case ViewDashboard:
-			// Move to first non-header item.
+			// Move to first navigable (non-header, non-blank, non-placeholder) item.
 			items := buildDashItems(m)
 			for i, it := range items {
-				if !it.isHeader {
+				if !it.isHeader && !it.isBlank && !it.isPlaceholder {
 					m.dashCursor = i
 					break
 				}

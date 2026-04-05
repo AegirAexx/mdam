@@ -28,18 +28,18 @@ func (m Model) renderTabBar() string {
 		label string
 	}
 	tabs := []tabDef{
-		{ViewDashboard, "Dashboard"},
-		{ViewJournal, "Journal"},
-		{ViewKB, "KB"},
-		{ViewTags, "Tag Browser"},
+		{ViewDashboard, "1: Dashboard"},
+		{ViewJournal, "2: Journal"},
+		{ViewKB, "3: KB"},
+		{ViewTags, "4: Tag Browser"},
 	}
 
 	var parts []string
 	for _, t := range tabs {
 		if m.activeView == t.view {
-			parts = append(parts, m.theme.TabActive.Render(t.label))
+			parts = append(parts, lipgloss.NewStyle().Reverse(true).Padding(0, 1).Render(t.label))
 		} else {
-			parts = append(parts, m.theme.TabInactive.Render(t.label))
+			parts = append(parts, m.theme.Subtle.Padding(0, 1).Render(t.label))
 		}
 	}
 	line := strings.Join(parts, " ")
@@ -47,11 +47,18 @@ func (m Model) renderTabBar() string {
 }
 
 // renderReadMode renders the full-screen glamour read overlay.
+// Layout: document title header (1 line) | viewport | status bar (1 line).
 func (m Model) renderReadMode() string {
 	var b strings.Builder
+	title := m.readDocTitle
+	if title == "" {
+		title = "Document"
+	}
+	b.WriteString(m.theme.Accent.Width(m.width).Render(" " + title))
+	b.WriteString("\n")
 	b.WriteString(m.readViewport.View())
 	b.WriteString("\n")
-	b.WriteString(lipgloss.NewStyle().Faint(true).Render("  q / Esc  close"))
+	b.WriteString(m.renderStatusBar())
 	return b.String()
 }
 
@@ -165,7 +172,7 @@ func (m Model) renderFilePanel(width, height int) string {
 		name := filepath.Base(doc.Path)
 		pinMarker := ""
 		if m.pinnedPaths[doc.Path] {
-			pinMarker = " " + m.icons.Pinned
+			pinMarker = " [*]"
 		}
 		gitMarker := ""
 		if g := m.gitMarkerStyled(doc.Path); g != "" {
@@ -197,15 +204,65 @@ func (m Model) renderFilePanel(width, height int) string {
 // renderPreviewPanel renders the preview/detail panel.
 func (m Model) renderPreviewPanel(width, height int) string {
 	focused := m.activePanel == PanelPreview
-	title := styledPanelHeader("Preview", focused, width, m.theme, m.icons)
+
+	viewportAvail := height - 1 // minus panel header
+	if viewportAvail < 2 {
+		viewportAvail = 2
+	}
+
+	// For tree views (Journal/KB), use the pane-specific selected path.
+	if m.activeView == ViewJournal || m.activeView == ViewKB {
+		selectedPath := m.selectedDoc()
+		panelTitle := "Preview"
+		if selectedPath != "" {
+			for _, d := range m.docs {
+				if d.Path == selectedPath {
+					if d.Frontmatter.Title != "" {
+						panelTitle = d.Frontmatter.Title
+					}
+					break
+				}
+			}
+		}
+		title := styledPanelHeader(panelTitle, focused, width, m.theme, m.icons)
+		var lines []string
+		lines = append(lines, title)
+		if selectedPath == "" {
+			lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+				m.theme.Muted.Render("Select a document to preview."),
+			))
+			return strings.Join(lines, "\n")
+		}
+		if m.preview.Width > 0 && m.preview.TotalLineCount() > 0 {
+			vpLines := strings.Split(m.preview.View(), "\n")
+			for i, l := range vpLines {
+				if i >= viewportAvail {
+					break
+				}
+				lines = append(lines, l)
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	// ViewAll / ViewRecent: use fileCursor into visibleDocs.
+	docs := m.visibleDocs()
+	panelTitle := "Preview"
+	if m.fileCursor < len(docs) {
+		if t := docs[m.fileCursor].Frontmatter.Title; t != "" {
+			panelTitle = t
+		}
+	}
+	title := styledPanelHeader(panelTitle, focused, width, m.theme, m.icons)
 
 	var lines []string
 	lines = append(lines, title)
 
-	docs := m.visibleDocs()
-	viewportAvail := height - 1 // minus panel header
-	if viewportAvail < 2 {
-		viewportAvail = 2
+	if m.fileCursor >= len(docs) {
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("Select a document to preview."),
+		))
+		return strings.Join(lines, "\n")
 	}
 
 	if m.fileCursor < len(docs) {
@@ -298,11 +355,13 @@ func (m Model) renderStatusBar() string {
 		right = m.theme.StatusMsg.Render(":") + m.cmdInput.View()
 	case ModeSearch:
 		right = m.theme.StatusMsg.Render("/") + m.searchInput.View()
+	case ModeDeleteConfirm:
+		right = m.theme.Warning.Render(fmt.Sprintf("Delete %q? (y/n)", m.deleteConfirmTitle))
 	default:
 		if m.statusMsg != "" {
 			right = m.theme.StatusMsg.Render(m.statusMsg)
 		} else {
-			right = m.theme.StatusHint.Render("/search  :cmd  o:read  ?help  q:quit")
+			right = m.theme.Muted.Render("/  :  o:read  ?  q")
 		}
 	}
 
@@ -323,7 +382,7 @@ func (m Model) viewTemplatePicker() string {
 	b.WriteString("\n\n")
 	for i, t := range m.pickerTemplates {
 		if i == m.pickerCursor {
-			b.WriteString(m.theme.FileCursor.Render(fmt.Sprintf("  %s%-12s", m.icons.CursorSel, t.Name)))
+			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(fmt.Sprintf("  %-14s", t.Name)))
 		} else {
 			b.WriteString(m.theme.FileNormal.Render(fmt.Sprintf("  %-14s", t.Name)))
 		}
@@ -363,61 +422,58 @@ func (m Model) viewTemplateVars() string {
 	return b.String()
 }
 
-// viewHelp renders the help overlay.
+// viewHelp renders the help overlay as a centered bordered box.
 func (m Model) viewHelp() string {
-	var b strings.Builder
-	h := m.theme.DashboardHeader
-	k := m.theme.PreviewKey
+	h := m.theme.Accent
+	k := m.theme.Subtle
 	n := m.theme.FileNormal
 
-	b.WriteString("\n")
-	b.WriteString(h.Render("  Keybindings"))
-	b.WriteString("\n")
-	b.WriteString(m.theme.Divider.Render("  ───────────"))
-	b.WriteString("\n\n")
+	var b strings.Builder
+	b.WriteString(h.Render("Keybindings") + "\n\n")
 
-	b.WriteString(h.Render("  Navigation"))
-	b.WriteString("\n")
-	b.WriteString(k.Render("    j / k       ") + n.Render("move down / up") + "\n")
-	b.WriteString(k.Render("    h / l       ") + n.Render("prev / next panel") + "\n")
-	b.WriteString(k.Render("    gg / G      ") + n.Render("top / bottom") + "\n\n")
+	b.WriteString(h.Render("Navigation") + "\n")
+	b.WriteString(k.Render("  j / k       ") + n.Render("move down / up") + "\n")
+	b.WriteString(k.Render("  h / l       ") + n.Render("prev / next panel") + "\n")
+	b.WriteString(k.Render("  gg / G      ") + n.Render("top / bottom") + "\n\n")
 
-	b.WriteString(h.Render("  Modes"))
-	b.WriteString("\n")
-	b.WriteString(k.Render("    /           ") + n.Render("search") + "\n")
-	b.WriteString(k.Render("    :           ") + n.Render("command") + "\n")
-	b.WriteString(k.Render("    Esc         ") + n.Render("cancel / return to normal") + "\n\n")
+	b.WriteString(h.Render("Modes") + "\n")
+	b.WriteString(k.Render("  /           ") + n.Render("search") + "\n")
+	b.WriteString(k.Render("  :           ") + n.Render("command") + "\n")
+	b.WriteString(k.Render("  Esc         ") + n.Render("cancel / return to normal") + "\n\n")
 
-	b.WriteString(h.Render("  Panes"))
-	b.WriteString("\n")
-	b.WriteString(k.Render("    1           ") + n.Render("dashboard") + "\n")
-	b.WriteString(k.Render("    2           ") + n.Render("journal") + "\n")
-	b.WriteString(k.Render("    3           ") + n.Render("knowledge base") + "\n")
-	b.WriteString(k.Render("    4           ") + n.Render("tag browser") + "\n")
-	b.WriteString(k.Render("    Tab         ") + n.Render("next pane") + "\n")
-	b.WriteString(k.Render("    Shift+Tab   ") + n.Render("prev pane") + "\n\n")
+	b.WriteString(h.Render("Panes") + "\n")
+	b.WriteString(k.Render("  1           ") + n.Render("dashboard") + "\n")
+	b.WriteString(k.Render("  2           ") + n.Render("journal") + "\n")
+	b.WriteString(k.Render("  3           ") + n.Render("knowledge base") + "\n")
+	b.WriteString(k.Render("  4           ") + n.Render("tag browser") + "\n")
+	b.WriteString(k.Render("  Tab         ") + n.Render("next pane") + "\n")
+	b.WriteString(k.Render("  Shift+Tab   ") + n.Render("prev pane") + "\n\n")
 
-	b.WriteString(h.Render("  Actions"))
-	b.WriteString("\n")
-	b.WriteString(k.Render("    o           ") + n.Render("read document (glamour)") + "\n")
-	b.WriteString(k.Render("    Enter       ") + n.Render("open in $EDITOR") + "\n")
-	b.WriteString(k.Render("    n           ") + n.Render("new document") + "\n")
-	b.WriteString(k.Render("    s           ") + n.Render("scratch pad") + "\n")
-	b.WriteString(k.Render("    e           ") + n.Render("export") + "\n")
-	b.WriteString(k.Render("    p           ") + n.Render("pin / unpin") + "\n")
-	b.WriteString(k.Render("    d           ") + n.Render("delete (with confirmation)") + "\n")
-	b.WriteString(k.Render("    R           ") + n.Render("rescan") + "\n")
-	b.WriteString(k.Render("    q           ") + n.Render("quit") + "\n\n")
+	b.WriteString(h.Render("Actions") + "\n")
+	b.WriteString(k.Render("  o           ") + n.Render("read document (glamour)") + "\n")
+	b.WriteString(k.Render("  Enter       ") + n.Render("open in $EDITOR") + "\n")
+	b.WriteString(k.Render("  n           ") + n.Render("new document") + "\n")
+	b.WriteString(k.Render("  s           ") + n.Render("scratch pad") + "\n")
+	b.WriteString(k.Render("  e           ") + n.Render("export") + "\n")
+	b.WriteString(k.Render("  p           ") + n.Render("pin / unpin") + "\n")
+	b.WriteString(k.Render("  d           ") + n.Render("delete (with confirmation)") + "\n")
+	b.WriteString(k.Render("  R           ") + n.Render("rescan") + "\n")
+	b.WriteString(k.Render("  q           ") + n.Render("quit") + "\n\n")
 
-	b.WriteString(h.Render("  Commands (:)"))
-	b.WriteString("\n")
-	b.WriteString(k.Render("    :todo sweep     ") + n.Render("run TODO sweep") + "\n")
-	b.WriteString(k.Render("    :todo archive   ") + n.Render("archive old tasks") + "\n")
-	b.WriteString(k.Render("    :q / :quit      ") + n.Render("quit") + "\n\n")
+	b.WriteString(h.Render("Commands (:)") + "\n")
+	b.WriteString(k.Render("  :todo sweep     ") + n.Render("run TODO sweep") + "\n")
+	b.WriteString(k.Render("  :todo archive   ") + n.Render("archive old tasks") + "\n")
+	b.WriteString(k.Render("  :q / :quit      ") + n.Render("quit") + "\n\n")
 
-	b.WriteString(m.theme.StatusHint.Render("  Press ? to close help"))
-	b.WriteString("\n")
-	return b.String()
+	b.WriteString(m.theme.Muted.Render("Press ? or Esc to close"))
+
+	accentFg := m.theme.Accent.GetForeground()
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accentFg).
+		Padding(0, 1)
+	boxed := boxStyle.Render(b.String())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, boxed)
 }
 
 // gitMarkerStyled returns a styled git status marker string for the given file path.

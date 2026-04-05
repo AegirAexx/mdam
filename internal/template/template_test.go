@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDiscover(t *testing.T) {
@@ -188,6 +189,82 @@ func TestTemplateType(t *testing.T) {
 				t.Errorf("TemplateType() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRenderAtDateFormat(t *testing.T) {
+	// Fixed reference time: Wednesday April 01 2026.
+	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		content string
+		want    string
+	}{
+		{"{{date:Monday - January 02 2006}}", "Wednesday - April 01 2026"},
+		{"{{date:2006-01-02}}", "2026-04-01"},
+		{"{{date:January 2006}}", "April 2026"},
+		{"{{date:2006}}", "2026"},
+		{"{{date:Monday}}", "Wednesday"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.content, func(t *testing.T) {
+			tmpl := Template{Name: "test", Content: tt.content}
+			got, err := RenderAt(tmpl, nil, now)
+			if err != nil {
+				t.Fatalf("RenderAt() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("RenderAt(%q) = %q, want %q", tt.content, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderAtUsesSuppliedTime(t *testing.T) {
+	past := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	tmpl := Template{Name: "test", Content: "{{date:2006-01-02}}"}
+	got, err := RenderAt(tmpl, nil, past)
+	if err != nil {
+		t.Fatalf("RenderAt() error = %v", err)
+	}
+	if got != "2025-01-15" {
+		t.Errorf("RenderAt() = %q, want 2025-01-15", got)
+	}
+}
+
+func TestDateFormatNotReturnedByUnresolvedVars(t *testing.T) {
+	tmpl := Template{Name: "test", Content: "{{date:Monday}} {{title}}"}
+	rendered, err := Render(tmpl, nil)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	// {{date:Monday}} must be resolved; {{title}} must remain.
+	if strings.Contains(rendered, "{{date:") {
+		t.Errorf("Render() left {{date:FORMAT}} unresolved: %q", rendered)
+	}
+	unresolved := UnresolvedVars(rendered)
+	for _, v := range unresolved {
+		if strings.HasPrefix(v, "{{date:") {
+			t.Errorf("UnresolvedVars() returned date format var %q — should be resolved", v)
+		}
+	}
+	// {{title}} should still be unresolved.
+	found := false
+	for _, v := range unresolved {
+		if v == "{{title}}" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("UnresolvedVars() should still report {{title}} as unresolved")
+	}
+}
+
+func TestBuiltinJournalTemplateUsesDateFormat(t *testing.T) {
+	builtins := BuiltinTemplates()
+	content := builtins["journal"]
+	if !strings.Contains(content, "{{date:") {
+		t.Errorf("built-in journal template does not use {{date:FORMAT}} syntax")
 	}
 }
 

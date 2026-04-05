@@ -23,8 +23,8 @@ import (
 // cmdLoadDocs scans baseDir for all managed markdown documents.
 func cmdLoadDocs(baseDir string) tea.Cmd {
 	return func() tea.Msg {
-		docs, err := search.ListAll(baseDir)
-		return docsLoadedMsg{docs: docs, err: err}
+		docs, skipped, err := search.ListAll(baseDir)
+		return docsLoadedMsg{docs: docs, skipCount: skipped, err: err}
 	}
 }
 
@@ -213,6 +213,47 @@ func stripFrontmatter(content string) string {
 		return content
 	}
 	return strings.TrimSpace(rest[idx+5:]) // skip "\n---\n"
+}
+
+// prepareDocPreview strips YAML frontmatter from content and prepends the raw
+// "tags:" line from the frontmatter block (if tags are present). The result is
+// passed to glamour for rendering.
+func prepareDocPreview(content string) string {
+	tagsLine := ""
+	if strings.HasPrefix(content, "---\n") {
+		rest := content[4:]
+		end := strings.Index(rest, "\n---\n")
+		if end != -1 {
+			for _, line := range strings.Split(rest[:end], "\n") {
+				if strings.HasPrefix(line, "tags:") {
+					tagsLine = line
+					break
+				}
+			}
+		}
+	}
+	body := stripFrontmatter(content)
+	if tagsLine != "" {
+		return tagsLine + "\n\n" + body
+	}
+	return body
+}
+
+// cmdLoadPreviewDoc reads a file, strips its frontmatter, prepends the tags
+// line, renders with glamour, and trims any leading blank lines from the output.
+func cmdLoadPreviewDoc(path, glamourStyle string, width int) tea.Cmd {
+	return func() tea.Msg {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return previewReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
+		}
+		prepared := prepareDocPreview(string(content))
+		rendered, err := glamour.Render(prepared, glamourStyle)
+		if err != nil {
+			return previewReadyMsg{content: prepared}
+		}
+		return previewReadyMsg{content: strings.TrimLeft(rendered, "\n")}
+	}
 }
 
 // cmdLoadRead reads path, strips frontmatter, renders with glamour, and sends readReadyMsg.

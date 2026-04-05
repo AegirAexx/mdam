@@ -15,9 +15,11 @@ import (
 type kbRow struct {
 	isFolder bool
 	subtype  string // normalised subtype key (e.g. "Summary", "KB")
-	label    string // display label
+	icon     string // "▶" or "▼" (folder rows only)
+	label    string // display label: subtype name for folders, doc title for files
 	path     string // absolute path (file rows only)
 	title    string // doc title (file rows only)
+	count    int    // number of files in this subtype folder (folder rows only)
 }
 
 // kbSubtype derives the display subtype label from a KB document's type field.
@@ -101,7 +103,9 @@ func buildKBRows(docs []search.Result, expanded map[string]bool) []kbRow {
 		rows = append(rows, kbRow{
 			isFolder: true,
 			subtype:  k,
-			label:    fmt.Sprintf("%s %s", icon, k),
+			icon:     icon,
+			label:    k, // bare subtype label (§9.1 TUI-UX)
+			count:    len(g.files),
 		})
 		if isExpanded {
 			rows = append(rows, g.files...)
@@ -155,7 +159,9 @@ func (m Model) renderKBFilePanel(width, height int) string {
 
 	rows := buildKBRows(m.docs, m.kbExpanded)
 	if len(rows) == 0 {
-		lines = append(lines, "  (no KB documents)")
+		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+			m.theme.Muted.Render("No knowledge base documents."),
+		))
 		return strings.Join(lines, "\n")
 	}
 
@@ -167,17 +173,32 @@ func (m Model) renderKBFilePanel(width, height int) string {
 
 	for i := start; i < len(rows) && len(lines) < height-1; i++ {
 		row := rows[i]
-		var itemText string
-		if row.isFolder {
-			itemText = " " + truncate(row.label, width-2)
-		} else {
-			itemText = "     " + truncate(row.label, width-6)
-		}
 		var line string
-		if i == m.kbCursor && focused {
-			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+		if row.isFolder {
+			// Render: icon + label in Primary, [count] in Subtle outside reverse block.
+			countStr := m.theme.Subtle.Render(fmt.Sprintf(" [%d]", row.count))
+			countWidth := lipgloss.Width(countStr)
+			nameText := " " + row.icon + " " + truncate(row.label, width-4-countWidth)
+			if i == m.kbCursor && focused {
+				namePart := lipgloss.NewStyle().Reverse(true).Width(width - countWidth).Render(nameText)
+				line = namePart + countStr
+			} else {
+				line = m.theme.FileNormal.Render(nameText) + countStr
+			}
 		} else {
-			line = m.theme.FileNormal.Render(itemText)
+			pinMarker := ""
+			if m.pinnedPaths[row.path] {
+				pinMarker = " [*]"
+			}
+			pinW := lipgloss.Width(pinMarker)
+			itemText := "  " + truncate(row.label, width-3-pinW) + pinMarker
+			if i == m.kbCursor && focused {
+				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
+			} else if m.pinnedPaths[row.path] {
+				line = m.theme.FilePinned.Render(itemText)
+			} else {
+				line = m.theme.FileNormal.Render(itemText)
+			}
 		}
 		lines = append(lines, line)
 	}

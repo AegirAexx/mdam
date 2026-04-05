@@ -117,13 +117,14 @@ The left panel shows a month-folder tree. Only one month can be expanded at a ti
 | Key | Action |
 |---|---|
 | `j` / `k` | Move cursor through folders and files |
-| `l` / `Enter` on folder | Expand (collapse others) |
-| `h` / `Enter` on folder | Collapse |
+| `l` on folder | Expand |
+| `h` on folder | Collapse |
+| `h` on file | Collapse parent folder |
+| `l` on file | No-op (folder already open) |
 | `Enter` on file | Open in `$EDITOR` |
 | `o` on file | Open in read mode |
-| `l` on file | Switch focus to preview panel |
 
-The current month is auto-expanded and the cursor lands on the most recent entry when entering this pane.
+The current month is auto-expanded and the cursor lands on the most recent entry when entering this pane. If the current month has no entries, the most recent past month is expanded instead.
 
 ---
 
@@ -134,8 +135,10 @@ The left panel shows a subtype-folder tree derived from the `type` field (e.g. `
 | Key | Action |
 |---|---|
 | `j` / `k` | Move cursor |
-| `l` / `Enter` on folder | Expand |
-| `h` / `Enter` on folder | Collapse |
+| `l` on folder | Expand |
+| `h` on folder | Collapse |
+| `h` on file | Collapse parent folder |
+| `l` on file | No-op (folder already open) |
 | `Enter` on file | Open in `$EDITOR` |
 | `o` on file | Open in read mode |
 

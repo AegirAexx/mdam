@@ -8,8 +8,9 @@ import (
 
 // docsLoadedMsg is sent when the document scan completes.
 type docsLoadedMsg struct {
-	docs []search.Result
-	err  error
+	docs      []search.Result
+	skipCount int // number of .md files skipped due to parse errors
+	err       error
 }
 
 // todosLoadedMsg is sent when TODO tasks are loaded from disk.

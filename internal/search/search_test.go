@@ -162,9 +162,12 @@ func TestListAll(t *testing.T) {
 	makeDoc(t, dir, "b.md", doc("B"))
 	makeDoc(t, dir, "c.md", doc("C"))
 
-	results, err := ListAll(dir)
+	results, skipped, err := ListAll(dir)
 	if err != nil {
 		t.Fatalf("ListAll() error = %v", err)
+	}
+	if skipped != 0 {
+		t.Errorf("ListAll() skipped = %d, want 0", skipped)
 	}
 	if len(results) != 3 {
 		t.Errorf("ListAll() = %d results, want 3", len(results))

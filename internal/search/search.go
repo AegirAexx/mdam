@@ -33,16 +33,19 @@ type Filters struct {
 // search is not performed by default (see SearchWithBody).
 // Results are sorted by score descending.
 func Search(baseDir, query string, filters Filters) ([]Result, error) {
-	return search(baseDir, query, filters, false)
+	results, _, err := search(baseDir, query, filters, false)
+	return results, err
 }
 
 // SearchWithBody includes document body content in the search, which is slower.
 func SearchWithBody(baseDir, query string, filters Filters) ([]Result, error) {
-	return search(baseDir, query, filters, true)
+	results, _, err := search(baseDir, query, filters, true)
+	return results, err
 }
 
-func search(baseDir, query string, filters Filters, includeBody bool) ([]Result, error) {
+func search(baseDir, query string, filters Filters, includeBody bool) ([]Result, int, error) {
 	var results []Result
+	skipped := 0
 
 	err := filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -61,6 +64,7 @@ func search(baseDir, query string, filters Filters, includeBody bool) ([]Result,
 
 		doc, err := document.ParseFile(path)
 		if err != nil {
+			skipped++
 			return nil // skip unparseable files
 		}
 
@@ -81,7 +85,7 @@ func search(baseDir, query string, filters Filters, includeBody bool) ([]Result,
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, skipped, err
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -92,8 +96,9 @@ func search(baseDir, query string, filters Filters, includeBody bool) ([]Result,
 		return results[i].Frontmatter.Modified.After(results[j].Frontmatter.Modified)
 	})
 
-	return results, nil
+	return results, skipped, nil
 }
+
 
 // matchFilters returns true if the document passes all active filters.
 func matchFilters(doc document.Document, f Filters) bool {
@@ -212,6 +217,8 @@ func extractSnippet(s string, pos, maxLen int) string {
 }
 
 // ListAll returns all managed documents in baseDir without filtering or ranking.
-func ListAll(baseDir string) ([]Result, error) {
+// The second return value is the count of .md files that were found but could
+// not be parsed (silently skipped). A non-zero value indicates broken documents.
+func ListAll(baseDir string) ([]Result, int, error) {
 	return search(baseDir, "", Filters{}, false)
 }
