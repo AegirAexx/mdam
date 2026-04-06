@@ -14,7 +14,6 @@ import (
 	"github.com/AegirAexx/mdam/internal/git"
 	"github.com/AegirAexx/mdam/internal/search"
 	tmpl "github.com/AegirAexx/mdam/internal/template"
-	"github.com/AegirAexx/mdam/internal/todo"
 )
 
 // spinnerFrames is the loading animation sequence.
@@ -47,8 +46,8 @@ type Model struct {
 	docs      []search.Result // all documents from last scan
 	fileCursor int
 
-	// --- TODO state ---
-	todos []todo.Task
+	// --- Dashboard TODO preview ---
+	dashTodoRendered string
 
 	// --- Git state ---
 	gitStatus  git.RepoStatus
@@ -72,7 +71,8 @@ type Model struct {
 	preview viewport.Model
 
 	// --- Pinned documents ---
-	pinnedPaths map[string]bool // set of pinned absolute paths
+	pinnedOrder []string        // ordered list of pinned paths (oldest first)
+	pinnedPaths map[string]bool // set of pinned absolute paths (derived from pinnedOrder)
 
 	// --- Delete confirmation ---
 	deleteConfirmPath  string
@@ -172,9 +172,10 @@ func New(cfg config.Config) Model {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		cmdLoadDocs(m.cfg.BaseDir),
-		cmdLoadTodos(m.cfg.TodoPath()),
+		cmdLoadDashTodo(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width),
 		cmdLoadGitStatus(m.cfg.BaseDir),
 		cmdLoadPins(m.cfg.PinsPath()),
+		cmdAutoCreateJournal(m.cfg),
 		cmdTick(),
 	)
 }
@@ -227,9 +228,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Rebuild tag index so ViewTags is always current regardless of how it is reached.
 		return m, cmdBuildTagIndex(msg.docs)
 
-	case todosLoadedMsg:
+	case dashTodoReadyMsg:
 		if msg.err == nil {
-			m.todos = todo.FilterTasks(msg.tasks, "open", "")
+			m.dashTodoRendered = msg.content
+		}
+		return m, nil
+
+	case todoReadyMsg:
+		editor := resolveEditor(m.cfg.Editor)
+		if editor == "" {
+			m.statusMsg = "no editor configured ($EDITOR not set)"
+			return m, nil
+		}
+		return m, cmdOpenEditor(msg.path, editor)
+
+	case journalAutoCreateMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("journal auto-create: %v", msg.err)
+		} else if msg.created {
+			m.statusMsg = "created today's journal"
+			return m, cmdLoadDocs(m.cfg.BaseDir)
 		}
 		return m, nil
 
@@ -269,7 +287,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.statusMsg = "sweep done"
 		}
-		return m, cmdLoadTodos(m.cfg.TodoPath())
+		return m, cmdLoadDashTodo(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width)
 
 	case fileCreatedMsg:
 		if msg.err != nil {
@@ -290,7 +308,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			cmdLoadDocs(m.cfg.BaseDir),
 			cmdLoadGitStatus(m.cfg.BaseDir),
-			cmdLoadTodos(m.cfg.TodoPath()),
+			cmdLoadDashTodo(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width),
 			cmdTick(),
 		)
 
@@ -308,7 +326,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pinsLoadedMsg:
 		if msg.err == nil {
-			m.pinnedPaths = msg.pins
+			m.pinnedOrder = msg.pins
+			m.pinnedPaths = pinsToMap(msg.pins)
 		}
 		return m, nil
 
@@ -319,16 +338,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case readReadyMsg:
 		m.readViewport.SetContent(msg.content)
 		return m, nil
-
-	case deleteDoneMsg:
-		if msg.err != nil {
-			m.statusMsg = fmt.Sprintf("delete failed: %v", msg.err)
-		} else {
-			m.statusMsg = "deleted " + filepath.Base(msg.path)
-		}
-		m.mode = ModeNormal
-		m.deleteConfirmPath = ""
-		return m, cmdLoadDocs(m.cfg.BaseDir)
 
 	// --- Key events ---
 
@@ -344,8 +353,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTemplatePicker(msg)
 		case ModeTemplateVars:
 			return m.updateTemplateVars(msg)
-		case ModeDeleteConfirm:
-			return m.updateDeleteConfirm(msg)
 		case ModeRead:
 			return m.updateRead(msg)
 		}
@@ -514,6 +521,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Open in $EDITOR
 	case k == "enter":
+		// Dashboard right panel: open todo.md in editor.
+		if m.activeView == ViewDashboard && m.dashRight {
+			return m, cmdEnsureAndOpenTodo(m.cfg)
+		}
 		// Dashboard: enter on left column file item opens in editor.
 		if m.activeView == ViewDashboard && !m.dashRight {
 			items := buildDashItems(m)
@@ -628,6 +639,15 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "no document selected"
 			return m, nil
 		}
+		// Dashboard right panel: read todo.md.
+		if m.activeView == ViewDashboard && m.dashRight {
+			m.readReturnView = m.activeView
+			m.readReturnPanel = m.activePanel
+			m.readDocTitle = "TODO"
+			m.readViewport = viewport.New(m.width, m.height-3)
+			m.mode = ModeRead
+			return m, cmdLoadRead(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width)
+		}
 		// Dashboard: o on left column file item enters read mode.
 		if m.activeView == ViewDashboard && !m.dashRight {
 			items := buildDashItems(m)
@@ -687,6 +707,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k == "s":
 		return m, cmdEnsureAndOpenScratch(m.cfg)
 
+	// Todo
+	case k == "t":
+		return m, cmdEnsureAndOpenTodo(m.cfg)
+
 	// Export
 	case k == "e":
 		if selected := m.selectedDoc(); selected != "" {
@@ -697,23 +721,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Pin / unpin
 	case k == "p":
 		if selected := m.selectedDoc(); selected != "" {
-			m.pinnedPaths = togglePin(m.pinnedPaths, selected)
-			return m, cmdSavePins(m.cfg.PinsPath(), m.pinnedPaths)
+			m.pinnedOrder = togglePin(m.pinnedOrder, selected)
+			m.pinnedPaths = pinsToMap(m.pinnedOrder)
+			return m, cmdSavePins(m.cfg.PinsPath(), m.pinnedOrder)
 		}
 		m.statusMsg = "no document selected"
-
-	// Delete (with confirmation)
-	case k == "d":
-		if selected := m.selectedDoc(); selected != "" {
-			m.mode = ModeDeleteConfirm
-			m.deleteConfirmPath = selected
-			m.deleteConfirmTitle = m.selectedDocTitle()
-			if m.deleteConfirmTitle == "" {
-				m.deleteConfirmTitle = filepath.Base(selected)
-			}
-		} else {
-			m.statusMsg = "no document selected"
-		}
 
 	}
 
@@ -732,26 +744,6 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateDeleteConfirm handles key events when waiting for delete confirmation.
-func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "y":
-		m.mode = ModeNormal
-		m.statusMsg = ""
-		m.deleteConfirmTitle = ""
-		return m, cmdDeleteDoc(m.deleteConfirmPath)
-	case "n", "esc":
-		m.mode = ModeNormal
-		m.deleteConfirmPath = ""
-		m.deleteConfirmTitle = ""
-		m.statusMsg = ""
-		return m, nil
-	case "ctrl+c":
-		return m, tea.Quit
-	}
-	return m, nil
-}
-
 // updateRead handles key events in full-screen read mode (ModeRead).
 func (m Model) updateRead(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -763,10 +755,18 @@ func (m Model) updateRead(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.readViewport.LineDown(1)
 	case "k", "up":
 		m.readViewport.LineUp(1)
-	case " ", "pgdown":
+	case "d":
+		m.readViewport.HalfViewDown()
+	case "u":
+		m.readViewport.HalfViewUp()
+	case "f":
 		m.readViewport.ViewDown()
-	case "b", "pgup":
+	case "b":
 		m.readViewport.ViewUp()
+	case "g":
+		m.readViewport.GotoTop()
+	case "G":
+		m.readViewport.GotoBottom()
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -924,9 +924,11 @@ func (m Model) executeCommand(cmd string) (tea.Model, tea.Cmd) {
 	case cmd == "q", cmd == "quit":
 		return m, tea.Quit
 	case cmd == "todo sweep":
-		return m, cmdSweep(m.cfg.JournalDir(), m.cfg.TodoPath())
+		m.statusMsg = "todo sweep is not yet available"
+		return m, nil
 	case cmd == "todo archive":
-		return m, cmdArchive(m.cfg.TodoPath(), m.cfg.ArchivePath(), m.cfg.Todo.ArchiveAfterDays)
+		m.statusMsg = "todo archive is not yet available"
+		return m, nil
 	case cmd == "":
 		return m, nil
 	default:
@@ -947,6 +949,16 @@ func (m *Model) buildGitFileMap() {
 // selectedDoc returns the absolute path of the document under the cursor,
 // considering the active view and search state.
 func (m Model) selectedDoc() string {
+	if m.activeView == ViewDashboard {
+		items := buildDashItems(m)
+		if m.dashCursor >= 0 && m.dashCursor < len(items) {
+			it := items[m.dashCursor]
+			if !it.isHeader && !it.isBlank && !it.isPlaceholder {
+				return it.doc.Path
+			}
+		}
+		return ""
+	}
 	if m.activeView == ViewJournal {
 		return m.journalSelectedPath()
 	}
@@ -965,7 +977,16 @@ func (m Model) selectedDoc() string {
 func (m Model) selectedDocTitle() string {
 	var path string
 	var title string
-	if m.activeView == ViewJournal {
+	if m.activeView == ViewDashboard {
+		items := buildDashItems(m)
+		if m.dashCursor >= 0 && m.dashCursor < len(items) {
+			it := items[m.dashCursor]
+			if !it.isHeader && !it.isBlank && !it.isPlaceholder {
+				path = it.doc.Path
+				title = it.label
+			}
+		}
+	} else if m.activeView == ViewJournal {
 		path = m.journalSelectedPath()
 		rows := buildJournalRows(filterByType(m.docs, "journal"), m.journalExpanded)
 		if m.journalCursor >= 0 && m.journalCursor < len(rows) {
@@ -1105,13 +1126,14 @@ func filterByType(docs []search.Result, docType string) []search.Result {
 }
 
 // recentDocs returns up to n docs sorted by Modified descending.
+// If n is 0, all docs are returned (sorted).
 func recentDocs(docs []search.Result, n int) []search.Result {
 	sorted := make([]search.Result, len(docs))
 	copy(sorted, docs)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Frontmatter.Modified.After(sorted[j].Frontmatter.Modified)
 	})
-	if len(sorted) > n {
+	if n > 0 && len(sorted) > n {
 		return sorted[:n]
 	}
 	return sorted

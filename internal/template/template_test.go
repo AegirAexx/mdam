@@ -151,7 +151,7 @@ func TestWriteBuiltins(t *testing.T) {
 		t.Fatalf("WriteBuiltins() error = %v", err)
 	}
 
-	expected := []string{"journal.md", "kb.md", "howto.md", "meeting.md", "scratch.md"}
+	expected := []string{"journal.md", "kb.md"}
 	for _, name := range expected {
 		path := filepath.Join(dir, name)
 		if _, err := os.Stat(path); err != nil {
@@ -179,8 +179,6 @@ func TestTemplateType(t *testing.T) {
 		{"type with spaces", "---\ntype:   kb  \ntitle: x\n---\n", "kb"},
 		{"builtin journal", journalTemplate, "journal"},
 		{"builtin kb", kbTemplate, "kb"},
-		{"builtin howto", howtoTemplate, "kb"},
-		{"builtin scratch", scratchTemplate, "scratch"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

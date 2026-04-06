@@ -8,7 +8,6 @@
 | Read | Full-screen glamour document viewer | `o` on a doc | `q` / `Esc` |
 | Command | Execute colon-prefixed commands | `:` | `Enter` / `Esc` |
 | Search | Fuzzy find across the document tree | `/` | `Enter` / `Esc` |
-| Delete? | Confirm or cancel a document deletion | `d` on a doc | `y` / `n` / `Esc` |
 
 ---
 
@@ -43,8 +42,8 @@
 | `Enter` | Open selected document in `$EDITOR` |
 | `o` | Open selected document in read mode |
 | `s` | Open scratch pad in `$EDITOR` |
-| `n` | New document (template picker) |
-| `d` | Delete selected document (prompts for confirmation) |
+| `t` | Open todo in `$EDITOR` |
+| `n` | New document (template picker: journal or kb) |
 | `e` | Export selected document (strip frontmatter) |
 | `p` | Pin / unpin selected document |
 | `R` | Force re-scan directory tree |
@@ -72,18 +71,13 @@ Entered with `o` on any document. Full-screen glamour-rendered view, frontmatter
 |---|---|
 | `j` / `↓` | Scroll down one line |
 | `k` / `↑` | Scroll up one line |
-| `Space` | Scroll down one page |
+| `d` | Scroll down half a page |
+| `u` | Scroll up half a page |
+| `f` | Scroll down one page |
 | `b` | Scroll up one page |
+| `g` | Go to top |
+| `G` | Go to bottom |
 | `q` / `Esc` | Close and return to previous pane |
-
----
-
-## Delete Confirmation Mode
-
-| Key | Action |
-|---|---|
-| `y` | Confirm delete |
-| `n` / `Esc` | Cancel |
 
 ---
 
@@ -94,8 +88,6 @@ Entered via `:`. Commands execute on `Enter`, cancel with `Esc`.
 | Command | Action |
 |---|---|
 | `:q` / `:quit` | Quit |
-| `:todo sweep` | Run TODO sweep manually |
-| `:todo archive` | Archive old completed tasks |
 
 ---
 
@@ -159,12 +151,13 @@ The left panel lists all tags sorted by document count. The right panel shows do
 
 ## Dashboard (key `1`)
 
-Two-column view. Left column is navigable (journal / pinned / recent). Right column shows open TODOs (display only).
+Two-column view. Left column is navigable (journal / pinned / recent). Right column shows a glamour-rendered preview of `todo.md`.
 
 | Key | Action |
 |---|---|
 | `j` / `k` | Navigate left column (skips section headers) |
-| `l` | Switch focus to right (TODO) column |
+| `l` | Switch focus to right (Todo) column |
 | `h` | Switch focus back to left column |
-| `Enter` | Open selected document in `$EDITOR` |
-| `o` | Open selected document in read mode |
+| `Enter` | Left: open selected document in `$EDITOR`; Right: open `todo.md` in `$EDITOR` |
+| `o` | Left: open selected document in read mode; Right: open `todo.md` in read mode |
+| `p` | Pin / unpin selected document (max 10 pins, oldest evicted) |

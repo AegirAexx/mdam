@@ -13,9 +13,10 @@ var (
 )
 
 var importCmd = &cobra.Command{
-	Use:   "import <path>",
-	Short: "Import a file or directory into the managed tree",
-	Args:  cobra.ExactArgs(1),
+	Use:    "import <path>",
+	Short:  "Import a file or directory into the managed tree",
+	Args:   cobra.ExactArgs(1),
+	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
 		opts := importer.Options{

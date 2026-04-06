@@ -21,8 +21,8 @@ It is an admin/routing tool — it never edits document bodies. All editing is d
 
 ## Non-Obvious Constraints
 
-- The app never writes to a document's markdown body except during TODO sweep.
-- Frontmatter updates are the only other permitted file mutations.
+- The app never writes to a document's markdown body.
+- Frontmatter updates are the only permitted file mutations.
 - No editing. No caching. The filesystem is always the source of truth.
 
 ## TUI and UI Work

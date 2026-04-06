@@ -311,8 +311,6 @@ func (m Model) renderStatusBar() string {
 		modeStyle = m.theme.StatusSearch
 	case ModeTemplatePicker, ModeTemplateVars:
 		modeStyle = m.theme.StatusNewDoc
-	case ModeDeleteConfirm:
-		modeStyle = m.theme.StatusCommand // reuse yellow for danger
 	default:
 		modeStyle = m.theme.StatusNormal
 	}
@@ -355,13 +353,11 @@ func (m Model) renderStatusBar() string {
 		right = m.theme.StatusMsg.Render(":") + m.cmdInput.View()
 	case ModeSearch:
 		right = m.theme.StatusMsg.Render("/") + m.searchInput.View()
-	case ModeDeleteConfirm:
-		right = m.theme.Warning.Render(fmt.Sprintf("Delete %q? (y/n)", m.deleteConfirmTitle))
 	default:
 		if m.statusMsg != "" {
 			right = m.theme.StatusMsg.Render(m.statusMsg)
 		} else {
-			right = m.theme.Muted.Render("/  :  o:read  ?  q")
+			right = m.theme.Muted.Render("/  :  o:read  t:todo  s:scratch  ?  q")
 		}
 	}
 
@@ -454,15 +450,13 @@ func (m Model) viewHelp() string {
 	b.WriteString(k.Render("  Enter       ") + n.Render("open in $EDITOR") + "\n")
 	b.WriteString(k.Render("  n           ") + n.Render("new document") + "\n")
 	b.WriteString(k.Render("  s           ") + n.Render("scratch pad") + "\n")
+	b.WriteString(k.Render("  t           ") + n.Render("todo") + "\n")
 	b.WriteString(k.Render("  e           ") + n.Render("export") + "\n")
 	b.WriteString(k.Render("  p           ") + n.Render("pin / unpin") + "\n")
-	b.WriteString(k.Render("  d           ") + n.Render("delete (with confirmation)") + "\n")
 	b.WriteString(k.Render("  R           ") + n.Render("rescan") + "\n")
 	b.WriteString(k.Render("  q           ") + n.Render("quit") + "\n\n")
 
 	b.WriteString(h.Render("Commands (:)") + "\n")
-	b.WriteString(k.Render("  :todo sweep     ") + n.Render("run TODO sweep") + "\n")
-	b.WriteString(k.Render("  :todo archive   ") + n.Render("archive old tasks") + "\n")
 	b.WriteString(k.Render("  :q / :quit      ") + n.Render("quit") + "\n\n")
 
 	b.WriteString(m.theme.Muted.Render("Press ? or Esc to close"))

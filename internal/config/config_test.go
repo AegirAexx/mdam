@@ -15,15 +15,6 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Theme != "tokyonight" {
 		t.Errorf("Theme = %q, want tokyonight", cfg.Theme)
 	}
-	if cfg.Todo.ArchiveAfterDays != 30 {
-		t.Errorf("ArchiveAfterDays = %d, want 30", cfg.Todo.ArchiveAfterDays)
-	}
-	if !cfg.Git.Enabled {
-		t.Error("Git.Enabled = false, want true")
-	}
-	if cfg.Git.AutoCommit {
-		t.Error("Git.AutoCommit = true, want false")
-	}
 	if !cfg.Journal.AutoCreate {
 		t.Error("Journal.AutoCreate = false, want true")
 	}
@@ -40,22 +31,8 @@ base_dir: ~/docs
 export_dir: ~/Desktop
 theme: nord
 
-import:
-  inbox_dir: ~/docs/.inbox
-  auto_fix: true
-
-git:
-  enabled: true
-  auto_commit: true
-  lazygit: false
-
-todo:
-  default_category: work
-  archive_after_days: 60
-
 journal:
   auto_create: false
-  sweep_on_create: false
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -74,21 +51,6 @@ journal:
 	}
 	if cfg.Theme != "nord" {
 		t.Errorf("Theme = %q, want nord", cfg.Theme)
-	}
-	if cfg.Import.AutoFix != true {
-		t.Error("Import.AutoFix = false, want true")
-	}
-	if cfg.Git.AutoCommit != true {
-		t.Error("Git.AutoCommit = false, want true")
-	}
-	if cfg.Git.Lazygit != false {
-		t.Error("Git.Lazygit = true, want false")
-	}
-	if cfg.Todo.DefaultCategory != "work" {
-		t.Errorf("Todo.DefaultCategory = %q, want work", cfg.Todo.DefaultCategory)
-	}
-	if cfg.Todo.ArchiveAfterDays != 60 {
-		t.Errorf("Todo.ArchiveAfterDays = %d, want 60", cfg.Todo.ArchiveAfterDays)
 	}
 	if cfg.Journal.AutoCreate {
 		t.Error("Journal.AutoCreate = true, want false")
@@ -146,20 +108,11 @@ func TestConfigDirs(t *testing.T) {
 	if cfg.TemplatesDir() != "/base/.templates" {
 		t.Errorf("TemplatesDir = %q", cfg.TemplatesDir())
 	}
-	if cfg.TodoDir() != "/base/todo" {
-		t.Errorf("TodoDir = %q", cfg.TodoDir())
-	}
-	if cfg.TodoPath() != "/base/todo/todo.md" {
+	if cfg.TodoPath() != "/base/todo.md" {
 		t.Errorf("TodoPath = %q", cfg.TodoPath())
 	}
-	if cfg.ScratchDir() != "/base/scratch" {
-		t.Errorf("ScratchDir = %q", cfg.ScratchDir())
-	}
-	if cfg.ScratchPath() != "/base/scratch/scratch.md" {
+	if cfg.ScratchPath() != "/base/scratch.md" {
 		t.Errorf("ScratchPath = %q", cfg.ScratchPath())
-	}
-	if cfg.ArchivePath() != "/base/todo/archive.md" {
-		t.Errorf("ArchivePath = %q", cfg.ArchivePath())
 	}
 }
 

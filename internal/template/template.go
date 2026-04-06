@@ -161,9 +161,6 @@ func BuiltinTemplates() map[string]string {
 	return map[string]string{
 		"journal": journalTemplate,
 		"kb":      kbTemplate,
-		"howto":   howtoTemplate,
-		"meeting": meetingTemplate,
-		"scratch": scratchTemplate,
 	}
 }
 
@@ -217,54 +214,3 @@ modified: {{date_short}}
 
 `
 
-var howtoTemplate = `---
-type: kb
-title: {{title}}
-tags: []
-created: {{date_short}}
-modified: {{date_short}}
-kb_type: howto
----
-
-# HowTo: {{title}}
-
-## Prerequisites
-
-## Steps
-
-## Notes
-
-`
-
-var meetingTemplate = `---
-type: kb
-title: {{title}}
-tags: []
-created: {{date_short}}
-modified: {{date_short}}
-kb_type: meeting
----
-
-# Meeting: {{title}}
-
-**Date:** {{date_short}}
-
-## Attendees
-
-## Agenda
-
-## Notes
-
-## Actions
-
-`
-
-var scratchTemplate = `---
-type: scratch
-title: Scratch Pad
-tags: []
-created: {{date_short}}
-modified: {{date_short}}
----
-
-`

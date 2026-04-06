@@ -34,9 +34,8 @@ type KeyMap struct {
 	Open          key.Binding // o
 	OpenEditor    key.Binding // Enter
 	Scratch       key.Binding // s
+	Todo          key.Binding // t
 	Export        key.Binding // e
-	Delete        key.Binding // d
-	DeleteConfirm key.Binding // y (in ModeDeleteConfirm)
 	Pin           key.Binding // p
 }
 
@@ -69,9 +68,8 @@ func DefaultKeyMap() KeyMap {
 		Open:          key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "read")),
 		OpenEditor:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "open in editor")),
 		Scratch:       key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "scratch")),
+		Todo:          key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "todo")),
 		Export:        key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export")),
-		Delete:        key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
-		DeleteConfirm: key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "confirm delete")),
 		Pin:           key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin/unpin")),
 	}
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/AegirAexx/mdam/internal/journal"
 	"github.com/AegirAexx/mdam/internal/search"
 	tmpl "github.com/AegirAexx/mdam/internal/template"
-	"github.com/AegirAexx/mdam/internal/todo"
 )
 
 // cmdLoadDocs scans baseDir for all managed markdown documents.
@@ -25,14 +24,6 @@ func cmdLoadDocs(baseDir string) tea.Cmd {
 	return func() tea.Msg {
 		docs, skipped, err := search.ListAll(baseDir)
 		return docsLoadedMsg{docs: docs, skipCount: skipped, err: err}
-	}
-}
-
-// cmdLoadTodos reads tasks from the global TODO file.
-func cmdLoadTodos(path string) tea.Cmd {
-	return func() tea.Msg {
-		tasks, err := todo.ReadTasks(path)
-		return todosLoadedMsg{tasks: tasks, err: err}
 	}
 }
 
@@ -57,25 +48,6 @@ func cmdExport(srcPath, destDir string) tea.Cmd {
 	return func() tea.Msg {
 		dest, err := export.ToFile(srcPath, destDir)
 		return exportDoneMsg{dest: dest, err: err}
-	}
-}
-
-// cmdSweep runs the TODO sweep against yesterday's journal entry.
-func cmdSweep(journalDir, todoPath string) tea.Cmd {
-	return func() tea.Msg {
-		yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-		journalPath := filepath.Join(journalDir, yesterday+".md")
-		err := todo.Sweep(journalPath, todoPath)
-		return sweepDoneMsg{err: err}
-	}
-}
-
-// cmdArchive moves old completed tasks to the archive file.
-func cmdArchive(todoPath, archivePath string, days int) tea.Cmd {
-	return func() tea.Msg {
-		dur := time.Duration(days) * 24 * time.Hour
-		err := todo.Archive(todoPath, archivePath, dur)
-		return sweepDoneMsg{err: err}
 	}
 }
 
@@ -169,6 +141,57 @@ func cmdEnsureAndOpenScratch(cfg config.Config) tea.Cmd {
 	}
 }
 
+// cmdAutoCreateJournal creates today's journal entry on startup if auto_create is enabled.
+// Returns nil cmd if disabled. Triggers a doc re-scan if a new entry was created.
+func cmdAutoCreateJournal(cfg config.Config) tea.Cmd {
+	if !cfg.Journal.AutoCreate {
+		return nil
+	}
+	return func() tea.Msg {
+		existed := journal.Exists(cfg.JournalDir(), time.Now())
+		_, err := journal.Create(cfg.JournalDir(), cfg.TemplatesDir(), time.Now())
+		if err != nil {
+			return journalAutoCreateMsg{err: err}
+		}
+		return journalAutoCreateMsg{created: !existed}
+	}
+}
+
+// cmdEnsureAndOpenTodo creates the todo file if it does not exist,
+// then sends todoReadyMsg with the path so the caller can open it in the editor.
+func cmdEnsureAndOpenTodo(cfg config.Config) tea.Cmd {
+	return func() tea.Msg {
+		path := cfg.TodoPath()
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			now := time.Now().Format("2006-01-02")
+			content := fmt.Sprintf(
+				"---\ntype: todo\ntitle: TODO\ntags: []\ncreated: %s\nmodified: %s\n---\n",
+				now, now,
+			)
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				return editorReturnMsg{err: fmt.Errorf("creating todo: %w", err)}
+			}
+		}
+		return todoReadyMsg{path: path}
+	}
+}
+
+// cmdLoadDashTodo reads the todo file and renders it with glamour for the dashboard.
+func cmdLoadDashTodo(path, glamourStyle string, width int) tea.Cmd {
+	return func() tea.Msg {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return dashTodoReadyMsg{err: err}
+		}
+		prepared := prepareDocPreview(string(content))
+		rendered, err := renderGlamour(prepared, glamourStyle, width)
+		if err != nil {
+			return dashTodoReadyMsg{content: prepared}
+		}
+		return dashTodoReadyMsg{content: strings.TrimLeft(rendered, "\n")}
+	}
+}
+
 // cmdLoadPreview reads a file and renders it with glamour, returning previewReadyMsg.
 func cmdLoadPreview(path, glamourStyle string, width int) tea.Cmd {
 	return func() tea.Msg {
@@ -176,7 +199,7 @@ func cmdLoadPreview(path, glamourStyle string, width int) tea.Cmd {
 		if err != nil {
 			return previewReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
 		}
-		rendered, err := glamour.Render(string(content), glamourStyle)
+		rendered, err := renderGlamour(string(content), glamourStyle, width)
 		if err != nil {
 			// Fallback: show raw content.
 			return previewReadyMsg{content: string(content)}
@@ -194,11 +217,24 @@ func cmdLoadPins(pinsPath string) tea.Cmd {
 }
 
 // cmdSavePins writes the pinned paths to pinsPath asynchronously.
-func cmdSavePins(pinsPath string, pins map[string]bool) tea.Cmd {
+func cmdSavePins(pinsPath string, pins []string) tea.Cmd {
 	return func() tea.Msg {
 		_ = savePins(pinsPath, pins) // errors silently dropped — pins are best-effort
 		return nil
 	}
+}
+
+// renderGlamour renders markdown content using glamour with the given style and
+// word wrap width. Falls back to glamour.Render if the renderer fails to create.
+func renderGlamour(content, style string, width int) (string, error) {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStylePath(style),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return glamour.Render(content, style)
+	}
+	return r.Render(content)
 }
 
 // stripFrontmatter removes the leading YAML frontmatter block (---…---) from
@@ -248,7 +284,7 @@ func cmdLoadPreviewDoc(path, glamourStyle string, width int) tea.Cmd {
 			return previewReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
 		}
 		prepared := prepareDocPreview(string(content))
-		rendered, err := glamour.Render(prepared, glamourStyle)
+		rendered, err := renderGlamour(prepared, glamourStyle, width)
 		if err != nil {
 			return previewReadyMsg{content: prepared}
 		}
@@ -264,7 +300,7 @@ func cmdLoadRead(path, glamourStyle string, width int) tea.Cmd {
 			return readReadyMsg{content: fmt.Sprintf("  (error reading file: %v)", err)}
 		}
 		stripped := stripFrontmatter(string(content))
-		rendered, err := glamour.Render(stripped, glamourStyle)
+		rendered, err := renderGlamour(stripped, glamourStyle, width)
 		if err != nil {
 			return readReadyMsg{content: stripped}
 		}

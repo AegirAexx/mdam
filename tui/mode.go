@@ -15,8 +15,6 @@ const (
 	ModeTemplatePicker
 	// ModeTemplateVars collects values for unresolved template variables.
 	ModeTemplateVars
-	// ModeDeleteConfirm prompts the user to confirm a document deletion.
-	ModeDeleteConfirm
 	// ModeRead is a full-screen glamour read overlay, triggered by "o".
 	ModeRead
 )
@@ -31,8 +29,6 @@ func (m Mode) String() string {
 		return "SEARCH"
 	case ModeTemplatePicker, ModeTemplateVars:
 		return "NEW DOC"
-	case ModeDeleteConfirm:
-		return "DELETE?"
 	case ModeRead:
 		return "READ"
 	default:

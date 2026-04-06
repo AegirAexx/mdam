@@ -53,9 +53,10 @@ func initConfig() {
 	}
 
 	if setup.IsFirstRun(cfgPath, cfg) {
-		cfg, err = setup.Run(cfgPath, cfg, os.Stdin, os.Stderr)
+		cfg, err = tui.RunWizard(cfgPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "mdam: setup: %v\n", err)
+			os.Exit(1)
 		}
 	} else {
 		for _, w := range setup.ValidateConfig(cfg) {
