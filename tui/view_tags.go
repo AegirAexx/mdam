@@ -83,21 +83,39 @@ func (m Model) renderTagPanel(width, height int) string {
 	var lines []string
 	lines = append(lines, header)
 
-	if len(m.tagEntries) == 0 {
-		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
-			m.theme.Muted.Render("No tags found."),
-		))
+	// Filter input row.
+	if m.tagFilterActive {
+		lines = append(lines, " "+m.tagFilterInput.View())
+	} else if v := m.tagFilterInput.Value(); v != "" {
+		lines = append(lines, m.theme.Muted.PaddingLeft(1).Render(
+			fmt.Sprintf("filter: %s  (Esc to clear)", v)))
+	} else {
+		lines = append(lines, m.theme.Muted.PaddingLeft(1).Render("Enter to filter..."))
+	}
+
+	entries := m.visibleTagEntries()
+
+	if len(entries) == 0 {
+		if m.tagFilterInput.Value() != "" {
+			lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+				m.theme.Muted.Render("No matching tags."),
+			))
+		} else {
+			lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
+				m.theme.Muted.Render("No tags found."),
+			))
+		}
 		return strings.Join(lines, "\n")
 	}
 
-	visibleRows := height - 2
+	visibleRows := height - 3 // header + filter input + bottom margin
 	start := 0
 	if m.tagCursor >= visibleRows {
 		start = m.tagCursor - visibleRows + 1
 	}
 
-	for i := start; i < len(m.tagEntries) && len(lines) < height-1; i++ {
-		te := m.tagEntries[i]
+	for i := start; i < len(entries) && len(lines) < height-1; i++ {
+		te := entries[i]
 		tagName := m.icons.Tag + te.Name
 		countStr := fmt.Sprintf(" (%d)", te.Count)
 		itemText := " " + truncate(tagName, width-len(countStr)-2) + countStr

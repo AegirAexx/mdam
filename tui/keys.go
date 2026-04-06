@@ -26,6 +26,7 @@ type KeyMap struct {
 	ViewJournal   key.Binding // 2
 	ViewKB        key.Binding // 3
 	ViewTags      key.Binding // 4
+	ViewSearchKey key.Binding // 5
 
 	// Actions
 	Quit          key.Binding // q
@@ -61,6 +62,7 @@ func DefaultKeyMap() KeyMap {
 		ViewJournal:   key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "journal")),
 		ViewKB:        key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "kb")),
 		ViewTags:      key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "tag browser")),
+		ViewSearchKey: key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "search")),
 
 		Quit:          key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 		Rescan:        key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rescan")),

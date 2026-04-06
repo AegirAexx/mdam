@@ -33,6 +33,7 @@ func (m Model) renderTabBar() string {
 		{ViewJournal, "2: Journal"},
 		{ViewKB, "3: KB"},
 		{ViewTags, "4: Tag Browser"},
+		{ViewSearch, "5: Search"},
 	}
 
 	var parts []string
@@ -88,6 +89,9 @@ func (m Model) View() string {
 	}
 	if m.activeView == ViewTags {
 		return m.renderTagBrowser()
+	}
+	if m.activeView == ViewSearch {
+		return m.renderSearchPane()
 	}
 
 	var b strings.Builder
@@ -308,8 +312,6 @@ func (m Model) renderStatusBar() string {
 	switch m.mode {
 	case ModeCommand:
 		modeStyle = m.theme.StatusCommand
-	case ModeSearch:
-		modeStyle = m.theme.StatusSearch
 	case ModeTemplatePicker, ModeTemplateVars:
 		modeStyle = m.theme.StatusNewDoc
 	default:
@@ -359,8 +361,6 @@ func (m Model) renderStatusBar() string {
 	switch m.mode {
 	case ModeCommand:
 		right = m.theme.StatusMsg.Render(":") + m.cmdInput.View()
-	case ModeSearch:
-		right = m.theme.StatusMsg.Render("/") + m.searchInput.View()
 	default:
 		if m.statusMsg != "" {
 			right = m.theme.StatusMsg.Render(m.statusMsg)
@@ -432,41 +432,62 @@ func (m Model) viewHelp() string {
 	k := m.theme.Subtle
 	n := m.theme.FileNormal
 
+	// Left column: Navigation, Panes, Actions.
+	var left strings.Builder
+	left.WriteString(h.Render("Navigation") + "\n")
+	left.WriteString(k.Render("  j / k       ") + n.Render("move down / up") + "\n")
+	left.WriteString(k.Render("  h / l       ") + n.Render("prev / next panel") + "\n")
+	left.WriteString(k.Render("  g / G       ") + n.Render("top / bottom") + "\n")
+	left.WriteString(k.Render("  Tab         ") + n.Render("next pane") + "\n")
+	left.WriteString(k.Render("  Shift+Tab   ") + n.Render("prev pane") + "\n\n")
+
+	left.WriteString(h.Render("Panes") + "\n")
+	left.WriteString(k.Render("  1           ") + n.Render("dashboard") + "\n")
+	left.WriteString(k.Render("  2           ") + n.Render("journal") + "\n")
+	left.WriteString(k.Render("  3           ") + n.Render("knowledge base") + "\n")
+	left.WriteString(k.Render("  4           ") + n.Render("tag browser") + "\n")
+	left.WriteString(k.Render("  5 / /       ") + n.Render("search") + "\n\n")
+
+	left.WriteString(h.Render("Actions") + "\n")
+	left.WriteString(k.Render("  Enter       ") + n.Render("open in $EDITOR / activate filter") + "\n")
+	left.WriteString(k.Render("  o           ") + n.Render("read document (glamour)") + "\n")
+	left.WriteString(k.Render("  n           ") + n.Render("new document") + "\n")
+	left.WriteString(k.Render("  s           ") + n.Render("scratch pad") + "\n")
+	left.WriteString(k.Render("  t           ") + n.Render("todo") + "\n")
+	left.WriteString(k.Render("  e           ") + n.Render("export") + "\n")
+	left.WriteString(k.Render("  p           ") + n.Render("pin / unpin") + "\n")
+	left.WriteString(k.Render("  R           ") + n.Render("rescan files & git") + "\n")
+	left.WriteString(k.Render("  Esc         ") + n.Render("clear filter / search") + "\n")
+	left.WriteString(k.Render("  :           ") + n.Render("command mode") + "\n")
+	left.WriteString(k.Render("  q           ") + n.Render("quit") + "\n")
+
+	// Right column: Read Mode, Git Markers.
+	var right strings.Builder
+	right.WriteString(h.Render("Read Mode (o)") + "\n")
+	right.WriteString(k.Render("  j / k       ") + n.Render("scroll line") + "\n")
+	right.WriteString(k.Render("  d / u       ") + n.Render("half page down / up") + "\n")
+	right.WriteString(k.Render("  f / b       ") + n.Render("full page down / up") + "\n")
+	right.WriteString(k.Render("  g / G       ") + n.Render("top / bottom") + "\n")
+	right.WriteString(k.Render("  q / Esc     ") + n.Render("exit read mode") + "\n\n")
+
+	right.WriteString(h.Render("Git Markers") + "\n")
+	right.WriteString(k.Render("  "+m.icons.GitModified+"  ") + n.Render("modified") + "\n")
+	right.WriteString(k.Render("  "+m.icons.GitUntracked+"  ") + n.Render("untracked (new file)") + "\n")
+	right.WriteString(k.Render("  "+m.icons.GitStaged+"  ") + n.Render("staged for commit") + "\n")
+
+	// Lay out two columns side by side.
+	colWidth := (m.width - 6) / 2 // 6 = border(2) + padding(2) + gap(2)
+	if colWidth < 30 {
+		colWidth = 30
+	}
+	leftCol := lipgloss.NewStyle().Width(colWidth).Render(left.String())
+	rightCol := lipgloss.NewStyle().Width(colWidth).Render(right.String())
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
+
 	var b strings.Builder
 	b.WriteString(h.Render("Keybindings") + "\n\n")
-
-	b.WriteString(h.Render("Navigation") + "\n")
-	b.WriteString(k.Render("  j / k       ") + n.Render("move down / up") + "\n")
-	b.WriteString(k.Render("  h / l       ") + n.Render("prev / next panel") + "\n")
-	b.WriteString(k.Render("  gg / G      ") + n.Render("top / bottom") + "\n\n")
-
-	b.WriteString(h.Render("Modes") + "\n")
-	b.WriteString(k.Render("  /           ") + n.Render("search") + "\n")
-	b.WriteString(k.Render("  :           ") + n.Render("command") + "\n")
-	b.WriteString(k.Render("  Esc         ") + n.Render("cancel / return to normal") + "\n\n")
-
-	b.WriteString(h.Render("Panes") + "\n")
-	b.WriteString(k.Render("  1           ") + n.Render("dashboard") + "\n")
-	b.WriteString(k.Render("  2           ") + n.Render("journal") + "\n")
-	b.WriteString(k.Render("  3           ") + n.Render("knowledge base") + "\n")
-	b.WriteString(k.Render("  4           ") + n.Render("tag browser") + "\n")
-	b.WriteString(k.Render("  Tab         ") + n.Render("next pane") + "\n")
-	b.WriteString(k.Render("  Shift+Tab   ") + n.Render("prev pane") + "\n\n")
-
-	b.WriteString(h.Render("Actions") + "\n")
-	b.WriteString(k.Render("  o           ") + n.Render("read document (glamour)") + "\n")
-	b.WriteString(k.Render("  Enter       ") + n.Render("open in $EDITOR") + "\n")
-	b.WriteString(k.Render("  n           ") + n.Render("new document") + "\n")
-	b.WriteString(k.Render("  s           ") + n.Render("scratch pad") + "\n")
-	b.WriteString(k.Render("  t           ") + n.Render("todo") + "\n")
-	b.WriteString(k.Render("  e           ") + n.Render("export") + "\n")
-	b.WriteString(k.Render("  p           ") + n.Render("pin / unpin") + "\n")
-	b.WriteString(k.Render("  R           ") + n.Render("rescan") + "\n")
-	b.WriteString(k.Render("  q           ") + n.Render("quit") + "\n\n")
-
-	b.WriteString(h.Render("Commands (:)") + "\n")
-	b.WriteString(k.Render("  :q / :quit      ") + n.Render("quit") + "\n\n")
-
+	b.WriteString(columns)
+	b.WriteString("\n\n")
 	b.WriteString(m.theme.Muted.Render("Press ? or Esc to close"))
 
 	accentFg := m.theme.Accent.GetForeground()

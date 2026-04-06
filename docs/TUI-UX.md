@@ -163,6 +163,9 @@ Every view that renders a list, tree, or panel must handle the empty case explic
 | Dashboard — TODOs | No open tasks | `No open tasks.` |
 | Preview panel | No document selected | `Select a document to preview.` |
 | Search results | Query returns nothing | `No results for "{query}".` |
+| Search pane (left) | No search executed | `Type a query and press Enter.` |
+| Search pane (right) | Category has no docs | `No documents in this category.` |
+| Tag browser filter | Filter has no matches | `No matching tags.` |
 
 ### 5.2 Placeholder style
 Placeholder text uses the **Muted** style and is rendered at the top of the content

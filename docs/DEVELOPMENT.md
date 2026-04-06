@@ -22,9 +22,9 @@ mdam/
 │   ├── config/        # Configuration loading (Viper, ~/.config/mdam/config.yml)
 │   ├── setup/         # First-run detection, config/dir scaffolding, template seeding
 │   ├── document/      # Frontmatter model, parsing, validation, kebab-case
-│   ├── importer/      # Import pipeline (backlogged — not yet active)
+│   ├── importer/      # Import pipeline
 │   ├── journal/       # Daily journal creation, listing, date parsing
-│   ├── todo/          # Task parsing (backlogged — sweep/archive not yet active)
+│   ├── todo/          # Task parsing
 │   ├── template/      # Template discovery, render, built-in templates (journal, kb)
 │   ├── search/        # Fuzzy search (frontmatter + optional body)
 │   ├── export/        # Frontmatter stripping for sharing
@@ -40,10 +40,10 @@ mdam/
 │   ├── view_journal.go   # Journal tree pane (key 2)
 │   ├── view_kb.go        # KB subtype tree pane (key 3)
 │   ├── view_tags.go      # Tag browser pane (key 4)
+│   ├── view_search.go    # Search pane (key 5)
 │   ├── theme.go          # Theme struct, NewTheme(), 5 palettes
 │   ├── icons.go          # Icons struct, DefaultIcons(), PlainIcons()
 │   ├── pins.go           # loadPins / savePins / togglePin
-│   ├── delete.go         # cmdDeleteDoc, deleteDoneMsg
 │   ├── wizard.go         # First-run TUI setup wizard
 │   └── tui.go            # Run(cfg) and RunWizard(cfgPath) entry points
 └── docs/

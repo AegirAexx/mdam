@@ -113,6 +113,67 @@ func TestTagIndexMsgUpdatesTagEntries(t *testing.T) {
 	}
 }
 
+func TestFilterTagEntries(t *testing.T) {
+	entries := []tagEntry{
+		{Name: "go", Count: 3},
+		{Name: "devops", Count: 2},
+		{Name: "project", Count: 5},
+		{Name: "golang", Count: 1},
+	}
+
+	// "go" should match "go" and "golang" (fuzzy contains).
+	filtered := filterTagEntries(entries, "go")
+	if len(filtered) != 2 {
+		t.Errorf("filterTagEntries('go') = %d entries, want 2", len(filtered))
+	}
+}
+
+func TestFilterTagEntriesEmpty(t *testing.T) {
+	entries := []tagEntry{{Name: "go", Count: 3}}
+	// Empty filter returns all entries.
+	filtered := filterTagEntries(entries, "")
+	if len(filtered) != 1 {
+		t.Errorf("filterTagEntries('') = %d entries, want 1", len(filtered))
+	}
+}
+
+func TestFilterTagEntriesNoMatch(t *testing.T) {
+	entries := []tagEntry{{Name: "go", Count: 3}}
+	filtered := filterTagEntries(entries, "xyz")
+	if len(filtered) != 0 {
+		t.Errorf("filterTagEntries('xyz') = %d entries, want 0", len(filtered))
+	}
+}
+
+func TestVisibleTagEntriesWithFilter(t *testing.T) {
+	m := newTestModel()
+	m.tagEntries = []tagEntry{
+		{Name: "go", Count: 3},
+		{Name: "devops", Count: 2},
+	}
+	m.tagFilterActive = true
+	m.tagFilterInput.SetValue("go")
+	m.tagFilteredEntries = filterTagEntries(m.tagEntries, "go")
+
+	entries := m.visibleTagEntries()
+	if len(entries) != 1 {
+		t.Errorf("visibleTagEntries with filter 'go' = %d, want 1", len(entries))
+	}
+}
+
+func TestVisibleTagEntriesWithoutFilter(t *testing.T) {
+	m := newTestModel()
+	m.tagEntries = []tagEntry{
+		{Name: "go", Count: 3},
+		{Name: "devops", Count: 2},
+	}
+
+	entries := m.visibleTagEntries()
+	if len(entries) != 2 {
+		t.Errorf("visibleTagEntries without filter = %d, want 2", len(entries))
+	}
+}
+
 // fakePinnedDocs are used for dashboard tests.
 var fakePinnedDocs = []search.Result{
 	{

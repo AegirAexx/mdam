@@ -3,7 +3,7 @@
 mdam is a Go TUI tool for managing markdown documents, journals, and TODOs.
 It is an admin/routing tool — it never edits document bodies. All editing is delegated to `$EDITOR`. The filesystem is the database. No caching, no in-memory state that persists between function calls.
 
-**Status: v0.1.0 — early alpha. No features have been individually tested.**
+**Status: alpha — usable, in active dogfooding. All features tested for daily use.**
 
 ## Mandatory After Every Change
 

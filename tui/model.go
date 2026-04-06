@@ -53,9 +53,15 @@ type Model struct {
 	gitStatus  git.RepoStatus
 	gitFileMap map[string]git.FileStatus // path → status for O(1) lookup
 
-	// --- Search state ---
-	searchResults []search.Result
-	searchActive  bool // true = showing search results in file panel
+	// --- Search pane (View 5) ---
+	searchPaneInput    textinput.Model
+	searchPaneQuery    string           // last executed query
+	searchJournalDocs  []search.Result  // results where type == "journal"
+	searchKBDocs       []search.Result  // results where type starts with "kb"
+	searchTagDocs      []search.Result  // results that matched via tag
+	searchCatCursor    int              // 0=Journal, 1=KB, 2=Tags
+	searchDocCursor    int              // right panel cursor
+	searchInputFocused bool
 
 	// --- Template picker state ---
 	templates      []tmpl.Template
@@ -97,9 +103,12 @@ type Model struct {
 	dashRight  bool // true = focus on right (TODO) column
 
 	// --- Tag browser ---
-	tagEntries   []tagEntry
-	tagCursor    int
-	tagDocCursor int // cursor within the documents panel on the right
+	tagEntries         []tagEntry
+	tagCursor          int
+	tagDocCursor       int // cursor within the documents panel on the right
+	tagFilterInput     textinput.Model
+	tagFilterActive    bool
+	tagFilteredEntries []tagEntry
 
 	// --- Spinner ---
 	spinnerFrame int
@@ -108,12 +117,8 @@ type Model struct {
 	loading  bool
 	errorMsg string
 
-	// --- Chord state ---
-	lastKey string
-
 	// --- Mode inputs ---
-	cmdInput    textinput.Model
-	searchInput textinput.Model
+	cmdInput textinput.Model
 
 	// --- Help overlay ---
 	showHelp bool
@@ -132,9 +137,13 @@ func New(cfg config.Config) Model {
 	cmd.Placeholder = "command"
 	cmd.CharLimit = 256
 
-	srch := textinput.New()
-	srch.Placeholder = "search"
-	srch.CharLimit = 256
+	searchIn := textinput.New()
+	searchIn.Placeholder = "search..."
+	searchIn.CharLimit = 256
+
+	tagFilter := textinput.New()
+	tagFilter.Placeholder = "filter tags..."
+	tagFilter.CharLimit = 256
 
 	varIn := textinput.New()
 	varIn.CharLimit = 256
@@ -160,7 +169,8 @@ func New(cfg config.Config) Model {
 		kbExpanded:      make(map[string]bool),
 		loading:         true,
 		cmdInput:        cmd,
-		searchInput:     srch,
+		searchPaneInput: searchIn,
+		tagFilterInput:  tagFilter,
 		varInput:        varIn,
 		width:           80,
 		height:          24,
@@ -260,17 +270,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case searchDoneMsg:
 		if msg.err == nil {
-			m.searchResults = msg.results
-			m.searchActive = true
-			if len(msg.results) == 0 {
+			m.searchPaneQuery = msg.query
+			m.searchJournalDocs, m.searchKBDocs, m.searchTagDocs = categorizeResults(msg.results, msg.query)
+			m.searchCatCursor = 0
+			m.searchDocCursor = 0
+			m.searchInputFocused = false
+			total := len(msg.results)
+			if total == 0 {
 				m.statusMsg = fmt.Sprintf("no results for %q", msg.query)
 			} else {
-				m.statusMsg = fmt.Sprintf("%d results for %q", len(msg.results), msg.query)
+				m.statusMsg = fmt.Sprintf("%d results for %q", total, msg.query)
 			}
 		} else {
 			m.errorMsg = fmt.Sprintf("search error: %v", msg.err)
 		}
-		m.fileCursor = 0
 		return m, nil
 
 	case exportDoneMsg:
@@ -347,8 +360,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateNormal(msg)
 		case ModeCommand:
 			return m.updateCommand(msg)
-		case ModeSearch:
-			return m.updateSearch(msg)
 		case ModeTemplatePicker:
 			return m.updateTemplatePicker(msg)
 		case ModeTemplateVars:
@@ -364,16 +375,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 
-	// Handle gg chord: two consecutive 'g' presses → jump to top.
-	if k == "g" {
-		if m.lastKey == "g" {
-			m.lastKey = ""
-			return m.jumpTop(), nil
+	// Text input routing must come before the gg chord handler so that
+	// characters like "g" reach the input instead of being captured.
+
+	// Search pane: when input is focused, route keys to the text input.
+	if m.searchInputFocused && m.activeView == ViewSearch {
+		switch k {
+		case "esc":
+			m.searchInputFocused = false
+			m.searchPaneInput.Blur()
+			return m, nil
+		case "enter":
+			query := strings.TrimSpace(m.searchPaneInput.Value())
+			m.searchInputFocused = false
+			m.searchPaneInput.Blur()
+			if query == "" {
+				return m, nil
+			}
+			return m, cmdSearch(m.cfg.BaseDir, query, search.Filters{})
+		case "ctrl+c":
+			return m, tea.Quit
 		}
-		m.lastKey = "g"
-		return m, nil
+		var teaCmd tea.Cmd
+		m.searchPaneInput, teaCmd = m.searchPaneInput.Update(msg)
+		return m, teaCmd
 	}
-	m.lastKey = k
+
+	// Tag browser: when filter is active, route keys to the filter input.
+	if m.tagFilterActive && m.activeView == ViewTags {
+		switch k {
+		case "esc":
+			m.tagFilterActive = false
+			m.tagFilterInput.Blur()
+			m.tagFilterInput.SetValue("")
+			m.tagFilteredEntries = nil
+			return m, nil
+		case "enter":
+			m.tagFilterActive = false
+			m.tagFilterInput.Blur()
+			return m, nil
+		case "ctrl+c":
+			return m, tea.Quit
+		}
+		var teaCmd tea.Cmd
+		m.tagFilterInput, teaCmd = m.tagFilterInput.Update(msg)
+		// Recompute filtered entries on each keystroke.
+		m.tagFilteredEntries = filterTagEntries(m.tagEntries, m.tagFilterInput.Value())
+		if m.tagCursor >= len(m.tagFilteredEntries) && len(m.tagFilteredEntries) > 0 {
+			m.tagCursor = len(m.tagFilteredEntries) - 1
+		} else if len(m.tagFilteredEntries) == 0 {
+			m.tagCursor = 0
+		}
+		m.tagDocCursor = 0
+		return m, teaCmd
+	}
+
+	// Single 'g' jumps to top (matching read mode).
+	if k == "g" {
+		return m.jumpTop(), nil
+	}
 
 	switch {
 	// Quit
@@ -462,9 +522,27 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Tag Browser: l/h move focus between panels without wrapping.
 	case (k == "l" || k == "right") && m.activeView == ViewTags:
-		m.activePanel = PanelPreview
+		if m.tagFilterActive {
+			// Don't switch panels while filter input is active.
+		} else {
+			m.activePanel = PanelPreview
+		}
 	case (k == "h" || k == "left") && m.activeView == ViewTags:
-		m.activePanel = PanelFiles
+		if m.tagFilterActive {
+			// Don't switch panels while filter input is active.
+		} else {
+			m.activePanel = PanelFiles
+		}
+
+	// Search pane: l/h move focus between panels without wrapping.
+	case (k == "l" || k == "right") && m.activeView == ViewSearch:
+		if !m.searchInputFocused {
+			m.activePanel = PanelPreview
+		}
+	case (k == "h" || k == "left") && m.activeView == ViewSearch:
+		if !m.searchInputFocused {
+			m.activePanel = PanelFiles
+		}
 
 	// Panel navigation (h/l move focus between panels)
 	case k == "l", k == "right":
@@ -472,18 +550,35 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case k == "h", k == "left":
 		m.activePanel = m.activePanel.prev()
 
-	// Mode transitions
+	// Search pane (/ opens search pane)
 	case k == "/":
-		m.mode = ModeSearch
-		m.searchInput.SetValue("")
+		m.activeView = ViewSearch
+		m.activePanel = PanelFiles
 		m.statusMsg = ""
-		return m, m.searchInput.Focus()
 
 	case k == ":":
 		m.mode = ModeCommand
 		m.cmdInput.SetValue("")
 		m.statusMsg = ""
 		return m, m.cmdInput.Focus()
+
+	// Escape on Search pane: clear results and reset to empty state.
+	case k == "esc" && m.activeView == ViewSearch:
+		m.searchPaneQuery = ""
+		m.searchJournalDocs = nil
+		m.searchKBDocs = nil
+		m.searchTagDocs = nil
+		m.searchCatCursor = 0
+		m.searchDocCursor = 0
+		m.searchPaneInput.SetValue("")
+		m.statusMsg = ""
+
+	// Escape on Tag Browser: clear the filter if one is set.
+	case k == "esc" && m.activeView == ViewTags:
+		m.tagFilterInput.SetValue("")
+		m.tagFilteredEntries = nil
+		m.tagCursor = 0
+		m.tagDocCursor = 0
 
 	// Help overlay
 	case k == "?":
@@ -492,32 +587,34 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Number keys — pane switching
 	case k == "1":
 		m.activeView = ViewDashboard
-		m.searchActive = false
 		m.dashCursor = 0
 		m.dashRight = false
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
 	case k == "2":
 		m.activeView = ViewJournal
-		m.searchActive = false
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
 		m.preview.SetContent("") // clear stale content from previous view
 		m = initJournalView(m)
 	case k == "3":
 		m.activeView = ViewKB
-		m.searchActive = false
 		m.kbCursor = 0
 		m.activePanel = PanelFiles
 		m.statusMsg = ""
 		m.preview.SetContent("") // clear stale content from previous view
 	case k == "4":
 		m.activeView = ViewTags
-		m.searchActive = false
 		m.tagCursor = 0
+		m.tagFilterActive = false
+		m.tagFilterInput.SetValue("")
 		m.activePanel = PanelFiles // always reset to left panel on entry (§9 Bug 1)
 		m.statusMsg = ""
 		return m, cmdBuildTagIndex(m.docs)
+	case k == "5":
+		m.activeView = ViewSearch
+		m.activePanel = PanelFiles
+		m.statusMsg = ""
 
 	// Open in $EDITOR
 	case k == "enter":
@@ -594,6 +691,13 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Tag browser: Enter on left panel activates the filter input.
+		if m.activeView == ViewTags && m.activePanel == PanelFiles {
+			m.tagFilterActive = true
+			m.tagFilterInput.SetValue("")
+			m.tagFilteredEntries = nil
+			return m, m.tagFilterInput.Focus()
+		}
 		// Tag browser: Enter on doc panel opens the highlighted tagged doc.
 		if m.activeView == ViewTags && m.activePanel == PanelPreview {
 			tagged := m.taggedDocs()
@@ -604,6 +708,25 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				return m, cmdOpenEditor(tagged[m.tagDocCursor].Path, editor)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
+		// Search pane: Enter on left panel focuses the input.
+		if m.activeView == ViewSearch && m.activePanel == PanelFiles {
+			m.searchInputFocused = true
+			return m, m.searchPaneInput.Focus()
+		}
+		// Search pane: Enter on right panel opens the highlighted doc in editor.
+		if m.activeView == ViewSearch && m.activePanel == PanelPreview {
+			docs := m.searchCategoryDocs()
+			if m.searchDocCursor < len(docs) {
+				editor := resolveEditor(m.cfg.Editor)
+				if editor == "" {
+					m.statusMsg = "no editor configured ($EDITOR not set)"
+					return m, nil
+				}
+				return m, cmdOpenEditor(docs[m.searchDocCursor].Path, editor)
 			}
 			m.statusMsg = "no document selected"
 			return m, nil
@@ -625,6 +748,25 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			tagged := m.taggedDocs()
 			if m.tagDocCursor < len(tagged) {
 				d := tagged[m.tagDocCursor]
+				title := d.Frontmatter.Title
+				if title == "" {
+					title = filepath.Base(d.Path)
+				}
+				m.readReturnView = m.activeView
+				m.readReturnPanel = m.activePanel
+				m.readDocTitle = title
+				m.readViewport = viewport.New(m.width, m.height-3)
+				m.mode = ModeRead
+				return m, cmdLoadRead(d.Path, m.theme.GlamourStyle, m.width)
+			}
+			m.statusMsg = "no document selected"
+			return m, nil
+		}
+		// Search pane: o on right panel opens the highlighted doc in read mode.
+		if m.activeView == ViewSearch && m.activePanel == PanelPreview {
+			docs := m.searchCategoryDocs()
+			if m.searchDocCursor < len(docs) {
+				d := docs[m.searchDocCursor]
 				title := d.Frontmatter.Title
 				if title == "" {
 					title = filepath.Base(d.Path)
@@ -797,35 +939,6 @@ func (m Model) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, teaCmd
 }
 
-// updateSearch handles key events in Search mode.
-func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = ModeNormal
-		m.searchInput.Blur()
-		m.searchActive = false
-		m.statusMsg = ""
-		return m, nil
-
-	case "enter":
-		query := strings.TrimSpace(m.searchInput.Value())
-		m.mode = ModeNormal
-		m.searchInput.Blur()
-		if query == "" {
-			m.searchActive = false
-			m.statusMsg = ""
-			return m, nil
-		}
-		return m, cmdSearch(m.cfg.BaseDir, query, search.Filters{})
-
-	case "ctrl+c":
-		return m, tea.Quit
-	}
-
-	var teaCmd tea.Cmd
-	m.searchInput, teaCmd = m.searchInput.Update(msg)
-	return m, teaCmd
-}
 
 // updateTemplatePicker handles key events in the template picker mode.
 func (m Model) updateTemplatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -965,6 +1078,13 @@ func (m Model) selectedDoc() string {
 	if m.activeView == ViewKB {
 		return m.kbSelectedPath()
 	}
+	if m.activeView == ViewSearch {
+		docs := m.searchCategoryDocs()
+		if m.searchDocCursor >= 0 && m.searchDocCursor < len(docs) {
+			return docs[m.searchDocCursor].Path
+		}
+		return ""
+	}
 	docs := m.visibleDocs()
 	if m.fileCursor >= 0 && m.fileCursor < len(docs) {
 		return docs[m.fileCursor].Path
@@ -1027,9 +1147,6 @@ func (m Model) selectedDocTitle() string {
 
 // visibleDocs returns the slice of documents appropriate for the current view.
 func (m Model) visibleDocs() []search.Result {
-	if m.searchActive {
-		return m.searchResults
-	}
 	switch m.activeView {
 	case ViewJournal:
 		return filterByType(m.docs, "journal")
@@ -1037,6 +1154,8 @@ func (m Model) visibleDocs() []search.Result {
 		return filterKBDocs(m.docs)
 	case ViewTags:
 		return nil // tag browser uses tagEntries, not docs
+	case ViewSearch:
+		return nil // search pane uses its own categorized lists
 	default:
 		return m.docs
 	}
@@ -1078,6 +1197,11 @@ func highlightedRelPath(m Model) string {
 		if m.tagDocCursor >= 0 && m.tagDocCursor < len(tagged) {
 			absPath = tagged[m.tagDocCursor].Path
 		}
+	case m.activeView == ViewSearch && m.activePanel == PanelPreview:
+		docs := m.searchCategoryDocs()
+		if m.searchDocCursor >= 0 && m.searchDocCursor < len(docs) {
+			absPath = docs[m.searchDocCursor].Path
+		}
 	default:
 		docs := m.visibleDocs()
 		if m.fileCursor >= 0 && m.fileCursor < len(docs) {
@@ -1096,10 +1220,11 @@ func highlightedRelPath(m Model) string {
 
 // taggedDocs returns the documents that carry the currently selected tag.
 func (m Model) taggedDocs() []search.Result {
-	if m.tagCursor >= len(m.tagEntries) {
+	entries := m.visibleTagEntries()
+	if m.tagCursor >= len(entries) {
 		return nil
 	}
-	tag := m.tagEntries[m.tagCursor].Name
+	tag := entries[m.tagCursor].Name
 	var out []search.Result
 	for _, d := range m.docs {
 		for _, t := range d.Frontmatter.Tags {
@@ -1110,6 +1235,67 @@ func (m Model) taggedDocs() []search.Result {
 		}
 	}
 	return out
+}
+
+// searchCategoryDocs returns the doc list for the currently selected search category.
+func (m Model) searchCategoryDocs() []search.Result {
+	switch m.searchCatCursor {
+	case 0:
+		return m.searchJournalDocs
+	case 1:
+		return m.searchKBDocs
+	case 2:
+		return m.searchTagDocs
+	default:
+		return nil
+	}
+}
+
+// categorizeResults splits search results into journal, KB, and tag-matched buckets.
+// A document can appear in multiple categories.
+func categorizeResults(results []search.Result, query string) (journal, kb, tags []search.Result) {
+	q := strings.ToLower(query)
+	for _, r := range results {
+		t := strings.ToLower(r.Frontmatter.Type)
+		if t == "journal" {
+			journal = append(journal, r)
+		}
+		if strings.HasPrefix(t, "kb") {
+			kb = append(kb, r)
+		}
+		for _, tag := range r.Frontmatter.Tags {
+			if search.FuzzyContains(strings.ToLower(tag), q) {
+				tags = append(tags, r)
+				break
+			}
+		}
+	}
+	return
+}
+
+// filterTagEntries returns tag entries whose names contain the filter as a substring.
+func filterTagEntries(entries []tagEntry, filter string) []tagEntry {
+	if filter == "" {
+		return entries
+	}
+	q := strings.ToLower(filter)
+	var out []tagEntry
+	for _, e := range entries {
+		if strings.Contains(strings.ToLower(e.Name), q) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// visibleTagEntries returns the tag entries visible in the tag browser,
+// respecting the active filter. The filtered list persists after the input
+// is deactivated so the user can navigate the narrowed results.
+func (m Model) visibleTagEntries() []tagEntry {
+	if m.tagFilterInput.Value() != "" {
+		return m.tagFilteredEntries
+	}
+	return m.tagEntries
 }
 
 // filterByType returns results matching the given document type.
@@ -1163,16 +1349,28 @@ func (m Model) moveCursorDown() Model {
 			m.kbCursor++
 		}
 	case m.activeView == ViewTags && m.activePanel == PanelFiles:
-		if m.tagCursor < len(m.tagEntries)-1 {
+		entries := m.visibleTagEntries()
+		if m.tagCursor < len(entries)-1 {
 			m.tagCursor++
 			m.tagDocCursor = 0 // reset doc cursor when tag changes
 		}
 	case m.activeView == ViewTags && m.activePanel == PanelPreview:
-		if m.tagCursor < len(m.tagEntries) {
+		entries := m.visibleTagEntries()
+		if m.tagCursor < len(entries) {
 			tagged := m.taggedDocs()
 			if m.tagDocCursor < len(tagged)-1 {
 				m.tagDocCursor++
 			}
+		}
+	case m.activeView == ViewSearch && m.activePanel == PanelFiles:
+		if m.searchCatCursor < 2 {
+			m.searchCatCursor++
+			m.searchDocCursor = 0
+		}
+	case m.activeView == ViewSearch && m.activePanel == PanelPreview:
+		docs := m.searchCategoryDocs()
+		if m.searchDocCursor < len(docs)-1 {
+			m.searchDocCursor++
 		}
 	case m.activePanel == PanelFiles:
 		docs := m.visibleDocs()
@@ -1213,6 +1411,15 @@ func (m Model) moveCursorUp() Model {
 		if m.tagDocCursor > 0 {
 			m.tagDocCursor--
 		}
+	case m.activeView == ViewSearch && m.activePanel == PanelFiles:
+		if m.searchCatCursor > 0 {
+			m.searchCatCursor--
+			m.searchDocCursor = 0
+		}
+	case m.activeView == ViewSearch && m.activePanel == PanelPreview:
+		if m.searchDocCursor > 0 {
+			m.searchDocCursor--
+		}
 	case m.activePanel == PanelFiles:
 		if m.fileCursor > 0 {
 			m.fileCursor--
@@ -1239,6 +1446,9 @@ func (m Model) jumpTop() Model {
 			m.kbCursor = 0
 		case ViewTags:
 			m.tagCursor = 0
+		case ViewSearch:
+			m.searchCatCursor = 0
+			m.searchDocCursor = 0
 		default:
 			m.fileCursor = 0
 		}
@@ -1260,9 +1470,13 @@ func (m Model) jumpBottom() Model {
 				m.kbCursor = len(rows) - 1
 			}
 		case ViewTags:
-			if len(m.tagEntries) > 0 {
-				m.tagCursor = len(m.tagEntries) - 1
+			entries := m.visibleTagEntries()
+			if len(entries) > 0 {
+				m.tagCursor = len(entries) - 1
 			}
+		case ViewSearch:
+			m.searchCatCursor = 2
+			m.searchDocCursor = 0
 		default:
 			docs := m.visibleDocs()
 			if len(docs) > 0 {

@@ -145,9 +145,9 @@ func TestFuzzyContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.s+"/"+tt.sub, func(t *testing.T) {
-			got := fuzzyContains(tt.s, tt.sub)
+			got := FuzzyContains(tt.s, tt.sub)
 			if got != tt.want {
-				t.Errorf("fuzzyContains(%q, %q) = %v, want %v", tt.s, tt.sub, got, tt.want)
+				t.Errorf("FuzzyContains(%q, %q) = %v, want %v", tt.s, tt.sub, got, tt.want)
 			}
 		})
 	}
