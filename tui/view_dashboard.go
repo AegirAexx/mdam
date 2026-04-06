@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/AegirAexx/mdam/internal/search"
-	"github.com/AegirAexx/mdam/internal/todo"
 )
 
 // dashItem represents a single row in the dashboard left column.
@@ -54,30 +52,35 @@ func buildDashItems(m Model) []dashItem {
 	}
 	items = append(items, dashItem{isBlank: true})
 
-	// Pinned.
+	// Pinned (in insertion order).
 	items = append(items, dashItem{isHeader: true, label: "Pinned [*]"})
 	items = append(items, dashItem{isBlank: true})
-	var pinned []search.Result
+	docsByPath := make(map[string]search.Result, len(m.docs))
 	for _, d := range m.docs {
-		if m.pinnedPaths[d.Path] {
-			pinned = append(pinned, d)
+		docsByPath[d.Path] = d
+	}
+	pinnedAdded := 0
+	for _, p := range m.pinnedOrder {
+		if d, ok := docsByPath[p]; ok {
+			if addDoc(d) {
+				pinnedAdded++
+			}
 		}
 	}
-	if len(pinned) == 0 {
+	if pinnedAdded == 0 {
 		items = append(items, dashItem{isPlaceholder: true, label: "No pinned documents."})
-	} else {
-		for _, d := range pinned {
-			addDoc(d)
-		}
 	}
 	items = append(items, dashItem{isBlank: true})
 
-	// Recent (last 20, excluding already-shown).
+	// Recent (up to 10, excluding journals/todo/scratch and already-shown).
 	items = append(items, dashItem{isHeader: true, label: "Recent"})
 	items = append(items, dashItem{isBlank: true})
-	allRecent := recentDocs(m.docs, 20)
+	recentCandidates := recentDocs(filterExcludeTypes(m.docs, "journal", "todo", "scratch"), 0)
 	recentAdded := 0
-	for _, d := range allRecent {
+	for _, d := range recentCandidates {
+		if recentAdded >= 10 {
+			break
+		}
 		if addDoc(d) {
 			recentAdded++
 		}
@@ -166,61 +169,42 @@ func (m Model) renderDashLeft(width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderDashRight renders the static TODO right column with priority grouping.
+// renderDashRight renders the todo.md glamour preview in the right column.
 func (m Model) renderDashRight(width, height int) string {
-	header := styledPanelHeader("TODOs", m.dashRight, width, m.theme, m.icons)
+	header := styledPanelHeader("Todo", m.dashRight, width, m.theme, m.icons)
 	var lines []string
 	lines = append(lines, header)
 
-	if len(m.todos) == 0 {
+	if m.dashTodoRendered == "" {
 		lines = append(lines, lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Render(
-			m.theme.Muted.Render("No open tasks."),
+			m.theme.Muted.Render("No todo.md found."),
 		))
 		return strings.Join(lines, "\n")
 	}
 
-	type priorityGroup struct {
-		label string
-		prio  string
-	}
-	groups := []priorityGroup{
-		{"!high", "high"},
-		{"!medium", "medium"},
-		{"!low", "low"},
-		{"", ""},
-	}
-
-	for _, g := range groups {
-		var tasks []todo.Task
-		for _, t := range m.todos {
-			if g.prio == "" {
-				// unprioritised: tasks with no priority set
-				if t.Priority == "" || strings.EqualFold(t.Priority, "none") {
-					tasks = append(tasks, t)
-				}
-			} else if strings.EqualFold(t.Priority, g.prio) {
-				tasks = append(tasks, t)
-			}
-		}
-		if len(tasks) == 0 {
-			continue
-		}
+	previewLines := strings.Split(m.dashTodoRendered, "\n")
+	for _, pl := range previewLines {
 		if len(lines) >= height-1 {
 			break
 		}
-		if g.label != "" {
-			lines = append(lines, m.theme.Subtle.Render(" "+g.label))
-		}
-		for _, task := range tasks {
-			if len(lines) >= height-1 {
-				break
-			}
-			lines = append(lines, m.theme.FileNormal.Render(
-				fmt.Sprintf("  %s", truncate(task.Text, width-3)),
-			))
-		}
+		lines = append(lines, pl)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// filterExcludeTypes returns docs that do not match any of the given types.
+func filterExcludeTypes(docs []search.Result, types ...string) []search.Result {
+	exclude := make(map[string]bool, len(types))
+	for _, t := range types {
+		exclude[strings.ToLower(t)] = true
+	}
+	var out []search.Result
+	for _, d := range docs {
+		if !exclude[strings.ToLower(d.Frontmatter.Type)] {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // todayJournal returns the path of today's journal entry if it exists in docs.

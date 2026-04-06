@@ -1,6 +1,8 @@
 # mdam — /ˈmæd.əm/ — Markdown Admin Management
 
-## Project Specification v1.0
+## Project Specification v1.0 (Archived)
+
+> **This is the original v1 specification, preserved for reference.** Several features described here have been deferred to the roadmap: full TODO system (sweep, archive, categories, priorities), import/inbox pipeline, lazygit integration, and git auto-commit. See the README for current feature status.
 
 > **Version: v0.1.0 — early, untested alpha.** All planned features are implemented but none have been individually tested or verified. The CLI surface, config format, and behavior may all change.
 

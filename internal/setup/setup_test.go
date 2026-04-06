@@ -169,7 +169,7 @@ func TestScaffoldDirs(t *testing.T) {
 		t.Fatalf("ScaffoldDirs() error = %v", err)
 	}
 
-	expected := []string{"journal", "kb", "todo", "scratch", ".inbox", ".templates"}
+	expected := []string{"journal", "kb", ".templates"}
 	for _, d := range expected {
 		path := filepath.Join(base, d)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -222,9 +222,36 @@ func TestSeedTemplates(t *testing.T) {
 	}
 }
 
+func TestEnsureTodo(t *testing.T) {
+	dir := t.TempDir()
+	todoPath := filepath.Join(dir, "todo.md")
+
+	// Creates file with correct frontmatter.
+	if err := EnsureTodo(todoPath); err != nil {
+		t.Fatalf("EnsureTodo() error = %v", err)
+	}
+	data, err := os.ReadFile(todoPath)
+	if err != nil {
+		t.Fatalf("reading todo: %v", err)
+	}
+	if !strings.Contains(string(data), "type: todo") {
+		t.Errorf("EnsureTodo() missing type: todo in %q", string(data))
+	}
+
+	// Second call must not overwrite existing file.
+	original := string(data)
+	if err := EnsureTodo(todoPath); err != nil {
+		t.Fatalf("EnsureTodo() second call error = %v", err)
+	}
+	data2, _ := os.ReadFile(todoPath)
+	if original != string(data2) {
+		t.Error("EnsureTodo() second call overwrote existing file")
+	}
+}
+
 func TestEnsureScratch(t *testing.T) {
 	dir := t.TempDir()
-	scratchPath := filepath.Join(dir, "scratch", "scratch.md")
+	scratchPath := filepath.Join(dir, "scratch.md")
 
 	// Creates file with correct frontmatter.
 	if err := EnsureScratch(scratchPath); err != nil {
@@ -273,15 +300,21 @@ func TestRun(t *testing.T) {
 	}
 
 	// Dirs were scaffolded.
-	for _, d := range []string{"journal", "kb", "todo", "scratch", ".inbox", ".templates"} {
+	for _, d := range []string{"journal", "kb", ".templates"} {
 		if _, err := os.Stat(filepath.Join(notesDir, d)); os.IsNotExist(err) {
 			t.Errorf("Run() missing dir %s", d)
 		}
 	}
 
-	// Scratch file exists.
-	scratchPath := filepath.Join(notesDir, "scratch", "scratch.md")
+	// Scratch file exists at root.
+	scratchPath := filepath.Join(notesDir, "scratch.md")
 	if _, err := os.Stat(scratchPath); os.IsNotExist(err) {
 		t.Error("Run() scratch file not created")
+	}
+
+	// Todo file exists at root.
+	todoPath := filepath.Join(notesDir, "todo.md")
+	if _, err := os.Stat(todoPath); os.IsNotExist(err) {
+		t.Error("Run() todo file not created")
 	}
 }

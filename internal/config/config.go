@@ -10,43 +10,20 @@ import (
 	"github.com/spf13/viper"
 )
 
-// ImportConfig holds import pipeline settings.
-type ImportConfig struct {
-	InboxDir string `mapstructure:"inbox_dir"`
-	AutoFix  bool   `mapstructure:"auto_fix"`
-}
-
-// GitConfig holds git integration settings.
-type GitConfig struct {
-	Enabled    bool `mapstructure:"enabled"`
-	AutoCommit bool `mapstructure:"auto_commit"`
-	Lazygit    bool `mapstructure:"lazygit"`
-}
-
-// TodoConfig holds TODO system settings.
-type TodoConfig struct {
-	DefaultCategory string `mapstructure:"default_category"`
-	ArchiveAfterDays int   `mapstructure:"archive_after_days"`
-}
-
 // JournalConfig holds journal behaviour settings.
 type JournalConfig struct {
-	AutoCreate    bool `mapstructure:"auto_create"`
-	SweepOnCreate bool `mapstructure:"sweep_on_create"`
+	AutoCreate bool `mapstructure:"auto_create"`
 }
 
 // Config is the top-level mdam configuration.
 type Config struct {
-	Editor     string        `mapstructure:"editor"`
-	Author     string        `mapstructure:"author"`
-	BaseDir    string        `mapstructure:"base_dir"`
-	ExportDir  string        `mapstructure:"export_dir"`
-	Theme      string        `mapstructure:"theme"`
-	NerdFonts  bool          `mapstructure:"nerd_fonts"`
-	Import     ImportConfig  `mapstructure:"import"`
-	Git        GitConfig     `mapstructure:"git"`
-	Todo       TodoConfig    `mapstructure:"todo"`
-	Journal    JournalConfig `mapstructure:"journal"`
+	Editor    string        `mapstructure:"editor"`
+	Author    string        `mapstructure:"author"`
+	BaseDir   string        `mapstructure:"base_dir"`
+	ExportDir string        `mapstructure:"export_dir"`
+	Theme     string        `mapstructure:"theme"`
+	NerdFonts bool          `mapstructure:"nerd_fonts"`
+	Journal   JournalConfig `mapstructure:"journal"`
 }
 
 // DefaultConfigPath returns the default path for the config file.
@@ -104,25 +81,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("theme", "tokyonight")
 	v.SetDefault("nerd_fonts", false)
 
-	v.SetDefault("import.inbox_dir", "")
-	v.SetDefault("import.auto_fix", false)
-
-	v.SetDefault("git.enabled", true)
-	v.SetDefault("git.auto_commit", false)
-	v.SetDefault("git.lazygit", true)
-
-	v.SetDefault("todo.default_category", "personal")
-	v.SetDefault("todo.archive_after_days", 30)
-
 	v.SetDefault("journal.auto_create", true)
-	v.SetDefault("journal.sweep_on_create", true)
 }
 
 // expandPaths expands ~ in directory paths.
 func expandPaths(cfg Config) Config {
 	cfg.BaseDir = expandHome(cfg.BaseDir)
 	cfg.ExportDir = expandHome(cfg.ExportDir)
-	cfg.Import.InboxDir = expandHome(cfg.Import.InboxDir)
 	return cfg
 }
 
@@ -152,29 +117,14 @@ func (c Config) TemplatesDir() string {
 	return filepath.Join(c.BaseDir, ".templates")
 }
 
-// TodoDir returns the todo subdirectory within BaseDir.
-func (c Config) TodoDir() string {
-	return filepath.Join(c.BaseDir, "todo")
-}
-
 // TodoPath returns the path for the global TODO file.
 func (c Config) TodoPath() string {
-	return filepath.Join(c.TodoDir(), "todo.md")
-}
-
-// ScratchDir returns the scratch subdirectory within BaseDir.
-func (c Config) ScratchDir() string {
-	return filepath.Join(c.BaseDir, "scratch")
+	return filepath.Join(c.BaseDir, "todo.md")
 }
 
 // ScratchPath returns the path for the scratch pad file.
 func (c Config) ScratchPath() string {
-	return filepath.Join(c.ScratchDir(), "scratch.md")
-}
-
-// ArchivePath returns the path for the TODO archive file.
-func (c Config) ArchivePath() string {
-	return filepath.Join(c.TodoDir(), "archive.md")
+	return filepath.Join(c.BaseDir, "scratch.md")
 }
 
 // PinsPath returns the path for the pinned documents file.

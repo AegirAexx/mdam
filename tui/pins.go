@@ -4,15 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 )
 
+// maxPins is the maximum number of pinned documents.
+const maxPins = 10
+
 // loadPins reads pinned document paths from path.
-// Returns an empty map (not an error) if the file does not exist.
-func loadPins(path string) (map[string]bool, error) {
+// Returns an empty slice (not an error) if the file does not exist.
+// The slice order is the insertion order (oldest first).
+func loadPins(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return make(map[string]bool), nil
+		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reading pins: %w", err)
@@ -21,38 +24,41 @@ func loadPins(path string) (map[string]bool, error) {
 	if err := json.Unmarshal(data, &paths); err != nil {
 		return nil, fmt.Errorf("parsing pins: %w", err)
 	}
-	m := make(map[string]bool, len(paths))
-	for _, p := range paths {
-		m[p] = true
-	}
-	return m, nil
+	return paths, nil
 }
 
-// savePins writes the pinned paths map to path as a sorted JSON array.
-func savePins(pinsPath string, pins map[string]bool) error {
-	paths := make([]string, 0, len(pins))
-	for p := range pins {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	data, err := json.Marshal(paths)
+// savePins writes the pinned paths to path as a JSON array preserving order.
+func savePins(pinsPath string, pins []string) error {
+	data, err := json.Marshal(pins)
 	if err != nil {
 		return fmt.Errorf("marshaling pins: %w", err)
 	}
 	return os.WriteFile(pinsPath, data, 0o644)
 }
 
-// togglePin returns a new pins map with path added if absent, or removed if present.
-// The original map is not mutated.
-func togglePin(pins map[string]bool, path string) map[string]bool {
-	next := make(map[string]bool, len(pins))
-	for k, v := range pins {
-		next[k] = v
+// pinsToMap builds an O(1) lookup map from the ordered pin list.
+func pinsToMap(pins []string) map[string]bool {
+	m := make(map[string]bool, len(pins))
+	for _, p := range pins {
+		m[p] = true
 	}
-	if next[path] {
-		delete(next, path)
-	} else {
-		next[path] = true
+	return m
+}
+
+// togglePin returns a new ordered pin list with path added (at end) if absent,
+// or removed if present. If adding would exceed maxPins, the oldest pin is evicted.
+func togglePin(pins []string, path string) []string {
+	// Check if already pinned — if so, remove.
+	for i, p := range pins {
+		if p == path {
+			return append(pins[:i], pins[i+1:]...)
+		}
+	}
+	// Add new pin.
+	next := append(pins, path)
+	// Evict oldest if over limit.
+	if len(next) > maxPins {
+		next = next[len(next)-maxPins:]
 	}
 	return next
 }

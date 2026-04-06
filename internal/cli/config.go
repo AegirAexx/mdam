@@ -26,15 +26,9 @@ var configCmd = &cobra.Command{
 		fmt.Fprintf(out, "base_dir:    %s\n", cfg.BaseDir)
 		fmt.Fprintf(out, "export_dir:  %s\n", cfg.ExportDir)
 		fmt.Fprintf(out, "theme:       %s\n", cfg.Theme)
-		fmt.Fprintf(out, "\ngit:\n")
-		fmt.Fprintf(out, "  enabled:     %v\n", cfg.Git.Enabled)
-		fmt.Fprintf(out, "  auto_commit: %v\n", cfg.Git.AutoCommit)
+		fmt.Fprintf(out, "nerd_fonts:  %v\n", cfg.NerdFonts)
 		fmt.Fprintf(out, "\njournal:\n")
-		fmt.Fprintf(out, "  auto_create:     %v\n", cfg.Journal.AutoCreate)
-		fmt.Fprintf(out, "  sweep_on_create: %v\n", cfg.Journal.SweepOnCreate)
-		fmt.Fprintf(out, "\ntodo:\n")
-		fmt.Fprintf(out, "  default_category:  %s\n", cfg.Todo.DefaultCategory)
-		fmt.Fprintf(out, "  archive_after_days: %d\n", cfg.Todo.ArchiveAfterDays)
+		fmt.Fprintf(out, "  auto_create: %v\n", cfg.Journal.AutoCreate)
 		return nil
 	},
 }

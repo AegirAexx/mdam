@@ -22,10 +22,10 @@ mdam/
 │   ├── config/        # Configuration loading (Viper, ~/.config/mdam/config.yml)
 │   ├── setup/         # First-run detection, config/dir scaffolding, template seeding
 │   ├── document/      # Frontmatter model, parsing, validation, kebab-case
-│   ├── importer/      # Import pipeline — validate, auto-fix, duplicate detection
+│   ├── importer/      # Import pipeline (backlogged — not yet active)
 │   ├── journal/       # Daily journal creation, listing, date parsing
-│   ├── todo/          # Task parsing, sweep logic, archive, filter
-│   ├── template/      # Template discovery, render, built-in templates
+│   ├── todo/          # Task parsing (backlogged — sweep/archive not yet active)
+│   ├── template/      # Template discovery, render, built-in templates (journal, kb)
 │   ├── search/        # Fuzzy search (frontmatter + optional body)
 │   ├── export/        # Frontmatter stripping for sharing
 │   └── git/           # Git status detection (shells out to git)
@@ -44,7 +44,8 @@ mdam/
 │   ├── icons.go          # Icons struct, DefaultIcons(), PlainIcons()
 │   ├── pins.go           # loadPins / savePins / togglePin
 │   ├── delete.go         # cmdDeleteDoc, deleteDoneMsg
-│   └── tui.go            # Run(cfg) entry point
+│   ├── wizard.go         # First-run TUI setup wizard
+│   └── tui.go            # Run(cfg) and RunWizard(cfgPath) entry points
 └── docs/
     ├── KEYBINDINGS.md    # TUI keybinding reference
     ├── HANDOFF.md        # Current project state for session continuity

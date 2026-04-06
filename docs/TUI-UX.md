@@ -270,12 +270,9 @@ Two columns. Left is navigable. Right is static (TODO display only).
 Each section has a Bold section header followed by a blank line. Section headers are
 skipped by `j`/`k` navigation (cursor lands only on document rows).
 
-### 10.2 Right column — TODOs
-Displays open tasks from `todo/todo.md`. Tasks are grouped by priority:
-`!high` first, then `!medium`, then `!low`, then unprioritised.
-
-Priority label rows use Secondary style. Task rows use Primary. Completed marker `✓`
-uses Muted.
+### 10.2 Right column — Todo
+Displays a glamour-rendered preview of `{base_dir}/todo.md`. The header reads "Todo".
+If the file does not exist, the placeholder reads "No todo.md found." in Muted style.
 
 ### 10.3 Column divider
 A vertical `│` separator in `theme.Subtle` divides the two columns. It spans the

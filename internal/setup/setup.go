@@ -36,31 +36,9 @@ theme: tokyonight
 # Use Nerd Font icons in the TUI (requires a patched terminal font).
 nerd_fonts: false
 
-import:
-  # Directory for files dropped in for import. Defaults to {base_dir}/.inbox.
-  inbox_dir: ""
-  # Auto-fix invalid filenames and frontmatter during import.
-  auto_fix: false
-
-git:
-  # Enable git integration (shows modified/untracked indicators).
-  enabled: true
-  # Automatically commit after edits.
-  auto_commit: false
-  # Use lazygit for git operations.
-  lazygit: true
-
-todo:
-  # Default category for new TODO items.
-  default_category: personal
-  # Days before completed tasks are moved to archive.
-  archive_after_days: 30
-
 journal:
   # Automatically create today's journal entry on startup.
   auto_create: true
-  # Sweep incomplete tasks from past entries when creating a new journal.
-  sweep_on_create: true
 `
 
 var validThemes = map[string]bool{
@@ -130,14 +108,11 @@ func PromptBaseDir(r io.Reader, w io.Writer) (string, error) {
 	return expandHome(line), nil
 }
 
-// ScaffoldDirs creates the 6 expected subdirs under baseDir. Idempotent.
+// ScaffoldDirs creates the expected subdirs under baseDir. Idempotent.
 func ScaffoldDirs(baseDir string) error {
 	dirs := []string{
 		filepath.Join(baseDir, "journal"),
 		filepath.Join(baseDir, "kb"),
-		filepath.Join(baseDir, "todo"),
-		filepath.Join(baseDir, "scratch"),
-		filepath.Join(baseDir, ".inbox"),
 		filepath.Join(baseDir, ".templates"),
 	}
 	for _, d := range dirs {
@@ -170,6 +145,19 @@ func EnsureScratch(scratchPath string) error {
 	return nil
 }
 
+// EnsureTodo creates todoPath with valid frontmatter if it doesn't exist.
+func EnsureTodo(todoPath string) error {
+	if _, err := os.Stat(todoPath); err == nil {
+		return nil // already exists
+	}
+	now := time.Now().UTC().Format("2006-01-02")
+	content := fmt.Sprintf("---\ntype: todo\ntitle: TODO\ntags: []\ncreated: %s\nmodified: %s\n---\n", now, now)
+	if err := os.WriteFile(todoPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("writing todo: %w", err)
+	}
+	return nil
+}
+
 // Run orchestrates the full first-run flow, returning the updated config.
 func Run(cfgPath string, cfg config.Config, r io.Reader, w io.Writer) (config.Config, error) {
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
@@ -197,9 +185,13 @@ func Run(cfgPath string, cfg config.Config, r io.Reader, w io.Writer) (config.Co
 			if err := SeedTemplates(templatesDir); err != nil {
 				return cfg, fmt.Errorf("seeding templates: %w", err)
 			}
-			scratchPath := filepath.Join(baseDir, "scratch", "scratch.md")
+			scratchPath := filepath.Join(baseDir, "scratch.md")
 			if err := EnsureScratch(scratchPath); err != nil {
 				return cfg, fmt.Errorf("ensuring scratch: %w", err)
+			}
+			todoPath := filepath.Join(baseDir, "todo.md")
+			if err := EnsureTodo(todoPath); err != nil {
+				return cfg, fmt.Errorf("ensuring todo: %w", err)
 			}
 		}
 

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/AegirAexx/mdam/internal/journal"
 	"github.com/AegirAexx/mdam/internal/todo"
@@ -10,8 +9,9 @@ import (
 )
 
 var todoCmd = &cobra.Command{
-	Use:   "todo",
-	Short: "Manage TODO tasks",
+	Use:    "todo",
+	Short:  "Manage TODO tasks",
+	Hidden: true,
 }
 
 var (
@@ -93,11 +93,7 @@ var todoArchiveCmd = &cobra.Command{
 	Use:   "archive",
 	Short: "Archive old completed tasks",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		d := time.Duration(todoArchiveOlderThan) * 24 * time.Hour
-		if err := todo.Archive(cfg.TodoPath(), cfg.ArchivePath(), d); err != nil {
-			return fmt.Errorf("archiving: %w", err)
-		}
-		cmd.Printf("archived tasks completed more than %d days ago\n", todoArchiveOlderThan)
+		cmd.Println("todo archive is not yet available")
 		return nil
 	},
 }

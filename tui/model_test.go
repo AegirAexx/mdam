@@ -15,7 +15,6 @@ import (
 	"github.com/AegirAexx/mdam/internal/git"
 	"github.com/AegirAexx/mdam/internal/search"
 	tmpl "github.com/AegirAexx/mdam/internal/template"
-	"github.com/AegirAexx/mdam/internal/todo"
 )
 
 // --- ANSI stripping helper ---
@@ -93,12 +92,6 @@ var fakeDocs = []search.Result{
 	},
 }
 
-// fakeTasks returns a few open tasks for testing.
-var fakeTasks = []todo.Task{
-	{Raw: "- [ ] Review PR #42 @work", Status: "open", Text: "Review PR #42"},
-	{Raw: "- [ ] Buy groceries @personal", Status: "open", Text: "Buy groceries"},
-}
-
 // modelWithDocs returns a Model pre-loaded with fakeDocs.
 func modelWithDocs() Model {
 	m := newTestModel()
@@ -142,7 +135,6 @@ func TestModeString(t *testing.T) {
 		{ModeSearch, "SEARCH"},
 		{ModeTemplatePicker, "NEW DOC"},
 		{ModeTemplateVars, "NEW DOC"},
-		{ModeDeleteConfirm, "DELETE?"},
 	}
 	for _, tt := range tests {
 		if got := tt.mode.String(); got != tt.want {
@@ -515,11 +507,34 @@ func TestDocsLoadedError(t *testing.T) {
 	}
 }
 
-func TestTodosLoaded(t *testing.T) {
+func TestDashTodoReady(t *testing.T) {
 	m := newTestModel()
-	m = sendMsg(m, todosLoadedMsg{tasks: fakeTasks})
-	if len(m.todos) != len(fakeTasks) {
-		t.Errorf("todos count = %d, want %d", len(m.todos), len(fakeTasks))
+	m = sendMsg(m, dashTodoReadyMsg{content: "rendered todo"})
+	if m.dashTodoRendered != "rendered todo" {
+		t.Errorf("dashTodoRendered = %q, want %q", m.dashTodoRendered, "rendered todo")
+	}
+}
+
+func TestJournalAutoCreate(t *testing.T) {
+	m := newTestModel()
+
+	// Created: sets status and triggers re-scan.
+	m = sendMsg(m, journalAutoCreateMsg{created: true})
+	if !strings.Contains(m.statusMsg, "created today's journal") {
+		t.Errorf("statusMsg = %q, want 'created today's journal'", m.statusMsg)
+	}
+
+	// Already existed: no status change.
+	m.statusMsg = ""
+	m = sendMsg(m, journalAutoCreateMsg{created: false})
+	if m.statusMsg != "" {
+		t.Errorf("statusMsg = %q, want empty", m.statusMsg)
+	}
+
+	// Error: shows error.
+	m = sendMsg(m, journalAutoCreateMsg{err: fmt.Errorf("disk full")})
+	if !strings.Contains(m.statusMsg, "disk full") {
+		t.Errorf("statusMsg = %q, want 'disk full' in it", m.statusMsg)
 	}
 }
 
@@ -661,9 +676,13 @@ func TestCommandQuit(t *testing.T) {
 
 func TestCommandTodoSweep(t *testing.T) {
 	m := newTestModel()
-	_, cmd := m.executeCommand("todo sweep")
-	if cmd == nil {
-		t.Error("executeCommand(todo sweep) should return a command")
+	m2, cmd := m.executeCommand("todo sweep")
+	m3 := m2.(Model)
+	if cmd != nil {
+		t.Error("executeCommand(todo sweep) should return nil command (feature on ice)")
+	}
+	if !strings.Contains(m3.statusMsg, "not yet available") {
+		t.Errorf("todo sweep status = %q, want 'not yet available'", m3.statusMsg)
 	}
 }
 
@@ -936,82 +955,10 @@ func TestScratchReadyMsgNoEditor(t *testing.T) {
 
 // --- Phase 5 tests ---
 
-func TestDeleteKeyEntersConfirmMode(t *testing.T) {
-	m := modelWithDocs()
-	m = sendKey(m, "d")
-	if m.mode != ModeDeleteConfirm {
-		t.Errorf("d key: mode = %v, want ModeDeleteConfirm", m.mode)
-	}
-	if m.deleteConfirmPath == "" {
-		t.Error("d key: deleteConfirmPath should be set")
-	}
-}
-
-func TestDeleteKeyNoDocSelected(t *testing.T) {
-	m := newTestModel()
-	m = sendMsg(m, docsLoadedMsg{docs: []search.Result{}})
-	m = sendKey(m, "d")
-	if m.mode == ModeDeleteConfirm {
-		t.Error("d with no doc: should not enter delete confirm mode")
-	}
-	if !strings.Contains(m.statusMsg, "no document") {
-		t.Errorf("d with no doc: statusMsg = %q, want 'no document'", m.statusMsg)
-	}
-}
-
-func TestDeleteConfirmYReturnsCmd(t *testing.T) {
-	m := modelWithDocs()
-	m = sendKey(m, "d") // enter confirm mode
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
-	if cmd == nil {
-		t.Error("confirming delete (y) should return cmdDeleteDoc")
-	}
-}
-
-func TestDeleteConfirmNCancels(t *testing.T) {
-	m := modelWithDocs()
-	m = sendKey(m, "d")
-	m2 := sendKey(m, "n")
-	if m2.mode != ModeNormal {
-		t.Errorf("n in delete confirm: mode = %v, want ModeNormal", m2.mode)
-	}
-	if m2.deleteConfirmPath != "" {
-		t.Error("n in delete confirm: deleteConfirmPath should be cleared")
-	}
-}
-
-func TestDeleteConfirmEscCancels(t *testing.T) {
-	m := modelWithDocs()
-	m = sendKey(m, "d")
-	m2 := sendKey(m, "esc")
-	if m2.mode != ModeNormal {
-		t.Errorf("esc in delete confirm: mode = %v, want ModeNormal", m2.mode)
-	}
-}
-
-func TestDeleteDoneMsgReloadsAndSetsStatus(t *testing.T) {
-	m := modelWithDocs()
-	m2, cmd := m.Update(deleteDoneMsg{path: "/notes/setup-nginx.md"})
-	m3 := m2.(Model)
-	if !strings.Contains(m3.statusMsg, "deleted") {
-		t.Errorf("deleteDoneMsg: statusMsg = %q, want 'deleted'", m3.statusMsg)
-	}
-	if cmd == nil {
-		t.Error("deleteDoneMsg should return cmdLoadDocs")
-	}
-}
-
-func TestDeleteDoneMsgError(t *testing.T) {
-	m := newTestModel()
-	m2, _ := m.Update(deleteDoneMsg{path: "/notes/x.md", err: fmt.Errorf("permission denied")})
-	m3 := m2.(Model)
-	if !strings.Contains(m3.statusMsg, "delete failed") {
-		t.Errorf("deleteDoneMsg error: statusMsg = %q, want 'delete failed'", m3.statusMsg)
-	}
-}
-
 func TestPinKeyTogglesPin(t *testing.T) {
 	m := modelWithDocs()
+	// Move cursor to first navigable doc on dashboard (index 2 = first journal).
+	m.dashCursor = 2
 	path := fakeDocs[0].Path
 	if m.pinnedPaths[path] {
 		t.Fatal("path should not be pinned initially")
@@ -1028,6 +975,7 @@ func TestPinKeyTogglesPin(t *testing.T) {
 
 func TestPinKeyUnpins(t *testing.T) {
 	m := modelWithDocs()
+	m.dashCursor = 2
 	m = sendKey(m, "p") // pin
 	m2 := sendKey(m, "p") // unpin
 	path := fakeDocs[0].Path
@@ -1077,10 +1025,13 @@ func TestPreviewReadyMsgUpdatesViewport(t *testing.T) {
 
 func TestPinsLoadedMsgUpdatesPins(t *testing.T) {
 	m := newTestModel()
-	pins := map[string]bool{"/notes/a.md": true}
+	pins := []string{"/notes/a.md"}
 	m2 := sendMsg(m, pinsLoadedMsg{pins: pins})
 	if !m2.pinnedPaths["/notes/a.md"] {
 		t.Error("pinsLoadedMsg: /notes/a.md should be pinned")
+	}
+	if len(m2.pinnedOrder) != 1 || m2.pinnedOrder[0] != "/notes/a.md" {
+		t.Errorf("pinsLoadedMsg: pinnedOrder = %v, want [/notes/a.md]", m2.pinnedOrder)
 	}
 }
 
@@ -1170,15 +1121,9 @@ func TestNewModelNerdFonts(t *testing.T) {
 
 func TestViewTagsKeyBuildTagIndex(t *testing.T) {
 	m := modelWithDocs()
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6")})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
 	if cmd == nil {
-		t.Error("key 6 should return cmdBuildTagIndex")
-	}
-}
-
-func TestDeleteModeStringIs(t *testing.T) {
-	if ModeDeleteConfirm.String() != "DELETE?" {
-		t.Errorf("ModeDeleteConfirm.String() = %q, want DELETE?", ModeDeleteConfirm.String())
+		t.Error("key 4 should return cmdBuildTagIndex")
 	}
 }
 
@@ -1196,21 +1141,9 @@ func TestViewShowsFileNames(t *testing.T) {
 	}
 }
 
-// TestViewShowsDeleteConfirmStatus verifies the delete confirm status message.
-func TestViewShowsDeleteConfirmStatus(t *testing.T) {
-	m := modelWithDocs()
-	m.width = 80
-	m.height = 24
-	m = sendKey(m, "d")
-	view := stripANSI(m.View())
-	if !strings.Contains(view, "Delete") {
-		t.Errorf("delete confirm view should contain 'Delete':\n%s", view)
-	}
-}
-
 // --- Issue #3 tests: template picker filtering ---
 
-// TestNKeyFiltersPickerToJournalAndKB asserts that pressing "n" with all 5
+// TestNKeyFiltersPickerToJournalAndKB asserts that pressing "n" with the
 // built-in templates loaded results in exactly 2 pickerTemplates: journal and kb.
 func TestNKeyFiltersPickerToJournalAndKB(t *testing.T) {
 	m := newTestModel()
@@ -1218,8 +1151,8 @@ func TestNKeyFiltersPickerToJournalAndKB(t *testing.T) {
 	for name, content := range builtins {
 		m.templates = append(m.templates, tmpl.Template{Name: name, Content: content})
 	}
-	if len(m.templates) != 5 {
-		t.Fatalf("expected 5 built-in templates, got %d", len(m.templates))
+	if len(m.templates) != 2 {
+		t.Fatalf("expected 2 built-in templates, got %d", len(m.templates))
 	}
 
 	m = sendKey(m, "n")
