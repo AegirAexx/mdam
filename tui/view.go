@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -172,14 +173,14 @@ func (m Model) renderFilePanel(width, height int) string {
 		name := filepath.Base(doc.Path)
 		pinMarker := ""
 		if m.pinnedPaths[doc.Path] {
-			pinMarker = " [*]"
+			pinMarker = " " + m.icons.Pinned
 		}
 		gitMarker := ""
 		if g := m.gitMarkerStyled(doc.Path); g != "" {
 			gitMarker = " " + g
 		}
 
-		nameWidth := width - 2 - len(pinMarker) - lipgloss.Width(gitMarker)
+		nameWidth := width - 2 - lipgloss.Width(pinMarker) - lipgloss.Width(gitMarker)
 		if nameWidth < 1 {
 			nameWidth = 1
 		}
@@ -335,8 +336,15 @@ func (m Model) renderStatusBar() string {
 		frame := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
 		left += m.theme.StatusInfo.Render("│ " + frame + " scanning… ")
 	} else {
-		j, k, s := docCounts(m.docs)
-		left += m.theme.StatusInfo.Render(fmt.Sprintf("│ %d journal · %d kb · %d scratch ", j, k, s))
+		j, k := docCounts(m.docs)
+		counts := fmt.Sprintf("│ %d journal · %d kb ", j, k)
+		left += m.theme.StatusInfo.Render(counts)
+
+		// Missing singleton indicators.
+		missing := missingIndicators(m)
+		if missing != "" {
+			left += missing + " "
+		}
 	}
 
 	// File path of highlighted document (centre section).
@@ -510,6 +518,19 @@ func gitMarkerForStatus(fs git.FileStatus) string {
 	default:
 		return ""
 	}
+}
+
+// missingIndicators returns a styled string showing red warning icons for
+// missing singleton files (todo.md, scratch.md). Returns "" if both exist.
+func missingIndicators(m Model) string {
+	var parts []string
+	if _, err := os.Stat(m.cfg.TodoPath()); os.IsNotExist(err) {
+		parts = append(parts, m.theme.Warning.Render(m.icons.Missing+" todo"))
+	}
+	if _, err := os.Stat(m.cfg.ScratchPath()); os.IsNotExist(err) {
+		parts = append(parts, m.theme.Warning.Render(m.icons.Missing+" scratch"))
+	}
+	return strings.Join(parts, " ")
 }
 
 // --- Layout helpers ---

@@ -2,56 +2,49 @@
 
 mdam (Markdown Admin Management) is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base, scratch notes.
 
-**Current branch:** `refactor/simplify-setup-and-ice-features`
+**Current branch:** `fix/dogfooding-git-markers-root-ignore`
 
 ---
 
 ## Current State
 
-Major simplification to enable dogfooding, plus dashboard UX fixes and read mode improvements.
+Dogfooding fixes: git markers wired to all views, nerd font icons restored, root-level repo files ignored, dashboard UX fixes, recent list uses filesystem mtime.
+
+### What changed this session
+- **Git markers in all views** — `[M]`/`[?]`/`[A]` (or nerd font equivalents) now show in Journal, KB, Tags, and Dashboard views. Previously only wired to an unused flat file list.
+- **Nerd font icons restored** — all `DefaultIcons()` glyphs were `U+0020` (space). Replaced with correct codepoints using `\U` escape sequences that survive any editor/encoding.
+- **Pin markers use icon system** — hardcoded `[*]` replaced with `m.icons.Pinned` across all views. Dashboard section header also uses the icon.
+- **Root-level repo files ignored** — `README.md`, `LICENSE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md` silently skipped when in base_dir root. Prevents "skipped — invalid frontmatter" noise.
+- **Recent list uses filesystem mtime** — `recentDocs()` now sorts by `Result.ModTime` (from `os.Stat`) instead of `Frontmatter.Modified`. Editing a file immediately bumps it in the list.
+- **Dashboard right panel j/k disabled** — cursor no longer moves a hidden global file list when focus is on the todo panel.
+- **Status bar singleton indicators** — scratch count removed. Red warning icon shown when `todo.md` or `scratch.md` is missing.
+- **Roadmap cleaned** — lazygit integration and git auto-commit permanently removed from README roadmap and HANDOFF on-ice list.
 
 ### Features put on ice (backlogged)
 - **Full TODO system** — sweep, archive, categories, priorities. `internal/todo` package exists but is not wired to the TUI.
 - **Import/inbox pipeline** — `internal/importer` exists but `.inbox/` not scaffolded. CLI hidden.
-- **Lazygit integration** — removed from active keybindings.
 - **Git config** — removed from user-facing config. Git status detection still works.
 - **Delete feature** — `d` key disabled, `ModeDeleteConfirm` removed, `delete.go` removed.
 - **Search** — needs overhaul, flagged as next task.
+
+### Git status integration
+- `internal/git/git.go` — branch, ahead/behind, per-file status, stash count via `git` binary
+- Loaded async on: startup, editor return, manual `R` key
+- Status bar: branch name + `↑N`/`↓N` sync indicators
+- Per-file: styled markers in all tree views (Journal, KB, Tags, Dashboard)
+- No periodic polling, no `git fetch` — intentional
+
+### Nerd font icons
+- All codepoints in `tui/icons.go` use `\U` escape sequences (e.g., `\U000F0415`)
+- Includes: document types, git status, pin, missing, cursor, dashboard, tag, filter
 
 ### Directory structure
 - Scaffolded: `journal/`, `kb/`, `.templates/`
 - Singletons at base root: `todo.md`, `scratch.md`
 
-### Templates
-- Two built-in: `journal.md`, `kb.md`
-
 ### Config
 - Fields: editor, author, base_dir, export_dir, theme, nerd_fonts, journal.auto_create
 - No todo, git, or import sections
-
-### TUI Setup Wizard
-- `tui/wizard.go` — separate BubbleTea program for first-run
-- Steps: base_dir, editor, author, theme (live preview), nerd_fonts, export_dir, config preview
-
-### Dashboard (key 1)
-- Left: Journal (5 recent) / Pinned (up to 10, insertion order) / Recent (up to 10, excludes journal/todo/scratch)
-- Right: glamour-rendered `todo.md` preview
-- Enter/o on right panel opens todo.md in editor/read mode
-- `p` correctly pins from dashboard using `dashCursor`
-- `selectedDoc()` and `selectedDocTitle()` handle ViewDashboard
-
-### Pins
-- Ordered list in `pins.json` (insertion order, not sorted)
-- FIFO eviction at max 10 pins
-- `pinnedOrder []string` + `pinnedPaths map[string]bool` on Model
-
-### Read mode (key o)
-- Full-width glamour rendering (uses terminal width, not hardcoded 80)
-- Navigation: j/k (line), d/u (half-page), f/b (page), g/G (top/bottom)
-
-### Journal auto-create
-- `journal.auto_create: true` (default) creates today's entry on TUI startup
-- Triggers doc re-scan if new entry was created
 
 ## Next task: Search overhaul
 

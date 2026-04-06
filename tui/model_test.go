@@ -71,6 +71,7 @@ var fakeDocs = []search.Result{
 			Tags:     []string{"daily"},
 			Modified: time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
 		},
+		ModTime: time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
 	},
 	{
 		Path: "/notes/2026-03-13.md",
@@ -80,6 +81,7 @@ var fakeDocs = []search.Result{
 			Tags:     []string{"daily"},
 			Modified: time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC),
 		},
+		ModTime: time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC),
 	},
 	{
 		Path: "/notes/setup-nginx.md",
@@ -89,6 +91,7 @@ var fakeDocs = []search.Result{
 			Tags:     []string{"devops"},
 			Modified: time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC),
 		},
+		ModTime: time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC),
 	},
 }
 
@@ -609,8 +612,8 @@ func TestVisibleDocsKB(t *testing.T) {
 func TestRecentDocsHelper(t *testing.T) {
 	docs := recentDocs(fakeDocs, 10)
 	for i := 1; i < len(docs); i++ {
-		if docs[i].Frontmatter.Modified.After(docs[i-1].Frontmatter.Modified) {
-			t.Errorf("recentDocs not sorted by Modified desc at index %d", i)
+		if docs[i].ModTime.After(docs[i-1].ModTime) {
+			t.Errorf("recentDocs not sorted by ModTime desc at index %d", i)
 		}
 	}
 }
@@ -1273,15 +1276,12 @@ func TestDocCounts(t *testing.T) {
 		{Frontmatter: document.Frontmatter{Type: "scratch"}},
 		{Frontmatter: document.Frontmatter{Type: "unsorted"}},
 	}
-	j, k, s := docCounts(docs)
+	j, k := docCounts(docs)
 	if j != 2 {
 		t.Errorf("journal count = %d, want 2", j)
 	}
 	if k != 3 {
 		t.Errorf("kb count = %d, want 3 (kb + kb_summary + KB_DOMAIN)", k)
-	}
-	if s != 1 {
-		t.Errorf("scratch count = %d, want 1", s)
 	}
 }
 

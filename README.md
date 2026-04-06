@@ -71,7 +71,7 @@ mdam search "nginx"       # Fuzzy search across all documents
  Recent                     │
  Setup Nginx                │
 ────────────────────────────────────────────────────────────────
- NORMAL │ main ↑2 │ 3 journal · 1 kb   /  :  o:read  t:todo  s:scratch  ?  q
+ NORMAL │ main ↑2 │ 3 journal · 1 kb │ /  :  o:read  t:todo  s:scratch  ?  q
 ```
 
 The tab bar at the top shows all four panes. The left column is navigable; the right shows a live glamour-rendered preview. On the Dashboard, the right panel renders `todo.md`.
@@ -132,7 +132,7 @@ journal:
 | Templates | Two built-in templates (journal, kb); add custom `.md` files to `{base_dir}/.templates/` |
 | Fuzzy search | Across frontmatter fields, filenames, and document bodies |
 | Export | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
-| Git integration | Per-file status markers (modified / untracked) in the file panel |
+| Git integration | Branch + sync status in the status bar; per-file markers (modified / untracked / staged) in all views |
 | Dashboard | Navigable two-column view: recent journal / pinned / recent docs + glamour-rendered todo.md |
 | Tag browser | All tags with document counts; navigate into any tag to see its documents |
 | Read mode | Full-screen glamour-rendered overlay (`o`); vim navigation (`j`/`k`/`d`/`u`/`f`/`b`/`g`/`G`) |
@@ -149,8 +149,6 @@ The following features are planned but not yet implemented:
 - **Search overhaul** — improved fuzzy search UX
 - **Full TODO system** — task categories, priorities, sweep from journal entries, archive
 - **Import pipeline** — inbox directory for dropping in files, validation, auto-fix
-- **Lazygit integration** — `ctrl+g` handoff to lazygit for git operations
-- **Git auto-commit** — automatic commits on engine mutations (sweep, journal create)
 
 ---
 

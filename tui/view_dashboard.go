@@ -53,7 +53,7 @@ func buildDashItems(m Model) []dashItem {
 	items = append(items, dashItem{isBlank: true})
 
 	// Pinned (in insertion order).
-	items = append(items, dashItem{isHeader: true, label: "Pinned [*]"})
+	items = append(items, dashItem{isHeader: true, label: "Pinned " + m.icons.Pinned})
 	items = append(items, dashItem{isBlank: true})
 	docsByPath := make(map[string]search.Result, len(m.docs))
 	for _, d := range m.docs {
@@ -157,7 +157,14 @@ func (m Model) renderDashLeft(width, height int) string {
 				m.theme.Muted.Render(truncate(it.label, width-2)),
 			)
 		default:
-			itemText := " " + truncate(it.label, width-2)
+			gitMarker := ""
+			if it.doc.Path != "" {
+				if g := m.gitMarkerStyled(it.doc.Path); g != "" {
+					gitMarker = " " + g
+				}
+			}
+			gitW := lipgloss.Width(gitMarker)
+			itemText := " " + truncate(it.label, width-2-gitW) + gitMarker
 			if i == m.dashCursor && !m.dashRight {
 				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
 			} else {

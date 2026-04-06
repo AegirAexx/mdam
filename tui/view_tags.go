@@ -141,10 +141,14 @@ func (m Model) renderTagDocPanel(width, height int) string {
 		}
 		pinMarker := ""
 		if m.pinnedPaths[d.Path] {
-			pinMarker = " [*]"
+			pinMarker = " " + m.icons.Pinned
 		}
-		pinW := lipgloss.Width(pinMarker)
-		itemText := " " + truncate(d.Frontmatter.Title, width-2-pinW) + pinMarker
+		gitMarker := ""
+		if g := m.gitMarkerStyled(d.Path); g != "" {
+			gitMarker = " " + g
+		}
+		markerW := lipgloss.Width(pinMarker) + lipgloss.Width(gitMarker)
+		itemText := " " + truncate(d.Frontmatter.Title, width-2-markerW) + pinMarker + gitMarker
 		var line string
 		if i == m.tagDocCursor && docFocused {
 			line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)

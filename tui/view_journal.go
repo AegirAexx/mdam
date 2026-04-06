@@ -220,10 +220,14 @@ func (m Model) renderJournalFilePanel(width, height int) string {
 		} else {
 			pinMarker := ""
 			if m.pinnedPaths[row.path] {
-				pinMarker = " [*]"
+				pinMarker = " " + m.icons.Pinned
 			}
-			pinW := lipgloss.Width(pinMarker)
-			itemText := "  " + truncate(row.label, width-3-pinW) + pinMarker
+			gitMarker := ""
+			if g := m.gitMarkerStyled(row.path); g != "" {
+				gitMarker = " " + g
+			}
+			markerW := lipgloss.Width(pinMarker) + lipgloss.Width(gitMarker)
+			itemText := "  " + truncate(row.label, width-3-markerW) + pinMarker + gitMarker
 			if i == m.journalCursor && focused {
 				line = lipgloss.NewStyle().Reverse(true).Width(width).Render(itemText)
 			} else if m.pinnedPaths[row.path] {
