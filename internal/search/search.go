@@ -16,9 +16,21 @@ import (
 type Result struct {
 	Path        string
 	Frontmatter document.Frontmatter
+	ModTime     time.Time // filesystem modification time
 	Score       int
 	// Snippet is a short excerpt from the body (empty if body was not searched).
 	Snippet string
+}
+
+// rootIgnored lists conventional repository metadata filenames that should be
+// silently skipped when found in the base directory root.
+var rootIgnored = map[string]bool{
+	"README.md":          true,
+	"LICENSE.md":         true,
+	"CONTRIBUTING.md":    true,
+	"CHANGELOG.md":      true,
+	"CODE_OF_CONDUCT.md": true,
+	"SECURITY.md":        true,
 }
 
 // Filters controls which documents are searched.
@@ -62,10 +74,21 @@ func search(baseDir, query string, filters Filters, includeBody bool) ([]Result,
 			return nil
 		}
 
+		// Skip known repository metadata files at the base directory root.
+		if filepath.Dir(path) == baseDir && rootIgnored[d.Name()] {
+			return nil
+		}
+
 		doc, err := document.ParseFile(path)
 		if err != nil {
 			skipped++
 			return nil // skip unparseable files
+		}
+
+		// Capture filesystem mtime for recency sorting.
+		var modTime time.Time
+		if info, err := d.Info(); err == nil {
+			modTime = info.ModTime()
 		}
 
 		// Apply filters before scoring.
@@ -78,6 +101,7 @@ func search(baseDir, query string, filters Filters, includeBody bool) ([]Result,
 			results = append(results, Result{
 				Path:        path,
 				Frontmatter: doc.Frontmatter,
+				ModTime:     modTime,
 				Score:       score,
 				Snippet:     snippet,
 			})

@@ -1042,8 +1042,8 @@ func (m Model) visibleDocs() []search.Result {
 	}
 }
 
-// docCounts returns the count of journal, kb (all kb_* types), and scratch documents.
-func docCounts(docs []search.Result) (journal, kb, scratch int) {
+// docCounts returns the count of journal and kb (all kb_* types) documents.
+func docCounts(docs []search.Result) (journal, kb int) {
 	for _, d := range docs {
 		t := strings.ToLower(d.Frontmatter.Type)
 		switch {
@@ -1051,8 +1051,6 @@ func docCounts(docs []search.Result) (journal, kb, scratch int) {
 			journal++
 		case strings.HasPrefix(t, "kb"):
 			kb++
-		case t == "scratch":
-			scratch++
 		}
 	}
 	return
@@ -1125,13 +1123,13 @@ func filterByType(docs []search.Result, docType string) []search.Result {
 	return out
 }
 
-// recentDocs returns up to n docs sorted by Modified descending.
+// recentDocs returns up to n docs sorted by filesystem modification time descending.
 // If n is 0, all docs are returned (sorted).
 func recentDocs(docs []search.Result, n int) []search.Result {
 	sorted := make([]search.Result, len(docs))
 	copy(sorted, docs)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Frontmatter.Modified.After(sorted[j].Frontmatter.Modified)
+		return sorted[i].ModTime.After(sorted[j].ModTime)
 	})
 	if n > 0 && len(sorted) > n {
 		return sorted[:n]
@@ -1143,6 +1141,8 @@ func recentDocs(docs []search.Result, n int) []search.Result {
 
 func (m Model) moveCursorDown() Model {
 	switch {
+	case m.activeView == ViewDashboard && m.dashRight:
+		// Right column (todo preview) — no cursor movement.
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		next := m.dashCursor + 1
@@ -1185,6 +1185,8 @@ func (m Model) moveCursorDown() Model {
 
 func (m Model) moveCursorUp() Model {
 	switch {
+	case m.activeView == ViewDashboard && m.dashRight:
+		// Right column (todo preview) — no cursor movement.
 	case m.activeView == ViewDashboard && !m.dashRight:
 		items := buildDashItems(m)
 		prev := m.dashCursor - 1

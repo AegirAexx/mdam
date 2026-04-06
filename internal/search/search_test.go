@@ -174,6 +174,33 @@ func TestListAll(t *testing.T) {
 	}
 }
 
+func TestSearchSkipsRootGitFiles(t *testing.T) {
+	dir := t.TempDir()
+	validDoc := "---\ntitle: A\ntags: []\ncreated: 2026-03-14T10:00:00Z\nmodified: 2026-03-14T10:00:00Z\ntype: kb\n---\n"
+
+	// Root README.md — should be silently ignored (not counted as skipped).
+	makeDoc(t, dir, "README.md", "# My Repo\n\nJust a readme.")
+	// Valid doc in root.
+	makeDoc(t, dir, "notes.md", validDoc)
+	// README.md in a subdirectory — should be counted as skipped (not root).
+	sub := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	makeDoc(t, sub, "README.md", "# Sub readme, no frontmatter")
+
+	results, skipped, err := ListAll(dir)
+	if err != nil {
+		t.Fatalf("ListAll() error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("ListAll() = %d results, want 1 (only notes.md)", len(results))
+	}
+	if skipped != 1 {
+		t.Errorf("ListAll() skipped = %d, want 1 (sub/README.md)", skipped)
+	}
+}
+
 func TestSearchWithBody(t *testing.T) {
 	dir := t.TempDir()
 	makeDoc(t, dir, "note.md", "---\ntitle: Note\ntags: []\ncreated: 2026-03-14T10:00:00Z\nmodified: 2026-03-14T10:00:00Z\ntype: kb\n---\n\nThe quick brown fox jumps.\n")
