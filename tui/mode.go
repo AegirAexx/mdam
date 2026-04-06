@@ -9,8 +9,6 @@ const (
 	ModeNormal Mode = iota
 	// ModeCommand is activated by ":" — accepts colon-prefixed commands.
 	ModeCommand
-	// ModeSearch is activated by "/" — accepts fuzzy search queries.
-	ModeSearch
 	// ModeTemplatePicker is the template selection overlay for new documents.
 	ModeTemplatePicker
 	// ModeTemplateVars collects values for unresolved template variables.
@@ -25,8 +23,6 @@ func (m Mode) String() string {
 		return "NORMAL"
 	case ModeCommand:
 		return "COMMAND"
-	case ModeSearch:
-		return "SEARCH"
 	case ModeTemplatePicker, ModeTemplateVars:
 		return "NEW DOC"
 	case ModeRead:
@@ -44,11 +40,12 @@ const (
 	ViewJournal               // key 2
 	ViewKB                    // key 3
 	ViewTags                  // key 4
+	ViewSearch                // key 5
 )
 
 // cycleView advances the active view by delta (1 or -1), wrapping around.
 func cycleView(v View, delta int) View {
-	const n = 4 // total number of named views
+	const n = 5 // total number of named views
 	return View((int(v) + delta + n) % n)
 }
 

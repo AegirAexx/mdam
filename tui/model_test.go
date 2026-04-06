@@ -135,7 +135,6 @@ func TestModeString(t *testing.T) {
 	}{
 		{ModeNormal, "NORMAL"},
 		{ModeCommand, "COMMAND"},
-		{ModeSearch, "SEARCH"},
 		{ModeTemplatePicker, "NEW DOC"},
 		{ModeTemplateVars, "NEW DOC"},
 	}
@@ -254,24 +253,39 @@ func TestTabCyclesPanes(t *testing.T) {
 		t.Errorf("after third tab: view = %v, want ViewTags", m.activeView)
 	}
 	m = sendKey(m, "tab")
+	if m.activeView != ViewSearch {
+		t.Errorf("after fourth tab: view = %v, want ViewSearch", m.activeView)
+	}
+	m = sendKey(m, "tab")
 	if m.activeView != ViewDashboard {
-		t.Errorf("after fourth tab: view = %v, want ViewDashboard (wrap)", m.activeView)
+		t.Errorf("after fifth tab: view = %v, want ViewDashboard (wrap)", m.activeView)
 	}
 }
 
 func TestShiftTabCyclesPanesReverse(t *testing.T) {
 	m := newTestModel()
 	m = sendKey(m, "shift+tab")
-	if m.activeView != ViewTags {
-		t.Errorf("shift+tab from ViewDashboard = %v, want ViewTags", m.activeView)
+	if m.activeView != ViewSearch {
+		t.Errorf("shift+tab from ViewDashboard = %v, want ViewSearch", m.activeView)
 	}
 }
 
-func TestEnterSearchMode(t *testing.T) {
+func TestSlashSwitchesToSearchView(t *testing.T) {
 	m := newTestModel()
 	m = sendKey(m, "/")
-	if m.mode != ModeSearch {
-		t.Errorf("mode = %v, want ModeSearch", m.mode)
+	if m.activeView != ViewSearch {
+		t.Errorf("activeView = %v, want ViewSearch", m.activeView)
+	}
+	if m.searchInputFocused {
+		t.Error("searchInputFocused should be false — Enter activates it")
+	}
+}
+
+func TestKey5SwitchesToSearchView(t *testing.T) {
+	m := newTestModel()
+	m = sendKey(m, "5")
+	if m.activeView != ViewSearch {
+		t.Errorf("activeView = %v, want ViewSearch", m.activeView)
 	}
 }
 
@@ -380,14 +394,14 @@ func TestViewHelpOverlay(t *testing.T) {
 	}
 }
 
-func TestViewInSearchMode(t *testing.T) {
+func TestViewInSearchPane(t *testing.T) {
 	m := newTestModel()
 	m.width = 80
 	m.height = 24
 	m = sendKey(m, "/")
 	view := stripANSI(m.View())
-	if !strings.Contains(view, "SEARCH") {
-		t.Errorf("view in search mode missing SEARCH indicator")
+	if !strings.Contains(view, "5: Search") {
+		t.Errorf("view in search pane missing '5: Search' tab, got:\n%s", view)
 	}
 }
 
@@ -402,12 +416,12 @@ func TestViewInCommandMode(t *testing.T) {
 	}
 }
 
-func TestSearchEnterReturnsToNormal(t *testing.T) {
+func TestSearchEnterActivatesInput(t *testing.T) {
 	m := newTestModel()
-	m = sendKey(m, "/")
-	m = sendKey(m, "enter")
-	if m.mode != ModeNormal {
-		t.Errorf("after search Enter: mode = %v, want ModeNormal", m.mode)
+	m = sendKey(m, "/")     // switches to search pane, input not focused
+	m = sendKey(m, "enter") // activates input
+	if !m.searchInputFocused {
+		t.Error("searchInputFocused should be true after Enter on left panel")
 	}
 }
 
@@ -562,13 +576,18 @@ func TestGitStatusLoaded(t *testing.T) {
 
 func TestSearchResults(t *testing.T) {
 	m := newTestModel()
-	results := fakeDocs[:1]
-	m = sendMsg(m, searchDoneMsg{results: results, query: "nginx"})
-	if !m.searchActive {
-		t.Error("searchActive should be true after searchDoneMsg")
+	results := fakeDocs // journal + journal + kb
+	m = sendMsg(m, searchDoneMsg{results: results, query: "daily"})
+	if m.searchPaneQuery != "daily" {
+		t.Errorf("searchPaneQuery = %q, want %q", m.searchPaneQuery, "daily")
 	}
-	if len(m.searchResults) != 1 {
-		t.Errorf("searchResults count = %d, want 1", len(m.searchResults))
+	// "daily" is a tag on the two journal docs, so searchTagDocs should have 2.
+	if len(m.searchTagDocs) != 2 {
+		t.Errorf("searchTagDocs count = %d, want 2", len(m.searchTagDocs))
+	}
+	// Two journal docs in results.
+	if len(m.searchJournalDocs) != 2 {
+		t.Errorf("searchJournalDocs count = %d, want 2", len(m.searchJournalDocs))
 	}
 }
 
@@ -618,13 +637,12 @@ func TestRecentDocsHelper(t *testing.T) {
 	}
 }
 
-func TestVisibleDocsSearch(t *testing.T) {
+func TestVisibleDocsSearchReturnsNil(t *testing.T) {
 	m := modelWithDocs()
-	m.searchResults = fakeDocs[:1]
-	m.searchActive = true
+	m.activeView = ViewSearch
 	docs := m.visibleDocs()
-	if len(docs) != 1 {
-		t.Errorf("searchActive: visible docs = %d, want 1", len(docs))
+	if docs != nil {
+		t.Errorf("ViewSearch: visibleDocs should return nil, got %v", docs)
 	}
 }
 
@@ -785,12 +803,10 @@ func TestViewSwitching(t *testing.T) {
 
 func TestOldViewKeysNoop(t *testing.T) {
 	m := newTestModel()
-	// Keys 5 and 6 no longer switch views.
-	for _, k := range []string{"5", "6"} {
-		m2 := sendKey(m, k)
-		if m2.activeView != ViewDashboard {
-			t.Errorf("key %q should not change view, got %v", k, m2.activeView)
-		}
+	// Key 6 does not switch views.
+	m2 := sendKey(m, "6")
+	if m2.activeView != ViewDashboard {
+		t.Errorf("key %q should not change view, got %v", "6", m2.activeView)
 	}
 }
 
@@ -1003,9 +1019,10 @@ func TestCycleView(t *testing.T) {
 		want  View
 	}{
 		{ViewDashboard, 1, ViewJournal},
-		{ViewTags, 1, ViewDashboard}, // wraps
-		{ViewDashboard, -1, ViewTags}, // wraps backward
+		{ViewSearch, 1, ViewDashboard},     // wraps
+		{ViewDashboard, -1, ViewSearch},     // wraps backward
 		{ViewJournal, -1, ViewDashboard},
+		{ViewTags, 1, ViewSearch},
 	}
 	for _, tt := range tests {
 		got := cycleView(tt.start, tt.delta)

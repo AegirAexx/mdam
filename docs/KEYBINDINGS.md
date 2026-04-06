@@ -7,7 +7,6 @@
 | Normal | Navigate, browse, trigger actions | Default | — |
 | Read | Full-screen glamour document viewer | `o` on a doc | `q` / `Esc` |
 | Command | Execute colon-prefixed commands | `:` | `Enter` / `Esc` |
-| Search | Fuzzy find across the document tree | `/` | `Enter` / `Esc` |
 
 ---
 
@@ -21,7 +20,7 @@
 | `k` / `↑` | Move up |
 | `h` / `←` | Switch to left panel; collapse tree folder if on a folder row |
 | `l` / `→` | Switch to right panel; expand tree folder if on a folder row |
-| `gg` | Jump to top |
+| `g` | Jump to top |
 | `G` | Jump to bottom |
 | `Tab` | Cycle to next pane |
 | `Shift+Tab` | Cycle to previous pane |
@@ -33,32 +32,29 @@
 | `1` | Dashboard |
 | `2` | Journal (month-folder tree) |
 | `3` | KB (subtype-folder tree) |
-| `4` | Tag Browser |
+| `4` | Tag Browser (with substring filter) |
+| `5` / `/` | Search |
 
 ### Document Actions
 
 | Key | Action |
 |---|---|
-| `Enter` | Open selected document in `$EDITOR` |
+| `Enter` | Open selected document in `$EDITOR`; on Tag Browser / Search left panel, activates filter input |
 | `o` | Open selected document in read mode |
 | `s` | Open scratch pad in `$EDITOR` |
 | `t` | Open todo in `$EDITOR` |
 | `n` | New document (template picker: journal or kb) |
 | `e` | Export selected document (strip frontmatter) |
 | `p` | Pin / unpin selected document |
-| `R` | Force re-scan directory tree |
-
-### Search
-
-| Key | Action |
-|---|---|
-| `/` | Enter search mode |
+| `R` | Force re-scan directory tree and git status |
+| `Esc` | Clear filter (Tag Browser) or search results (Search pane) |
 
 ### Application
 
 | Key | Action |
 |---|---|
 | `?` | Toggle keybinding help overlay |
+| `:` | Command mode |
 | `q` | Quit mdam |
 
 ---
@@ -91,17 +87,6 @@ Entered via `:`. Commands execute on `Enter`, cancel with `Esc`.
 
 ---
 
-## Search Mode
-
-| Key | Action |
-|---|---|
-| `Enter` | Confirm search, return to normal with results |
-| `Esc` | Cancel search |
-
-After searching, use `j`/`k` to navigate results and `Enter` to open.
-
----
-
 ## Journal Pane (key `2`)
 
 The left panel shows a month-folder tree. Only one month can be expanded at a time.
@@ -122,7 +107,7 @@ The current month is auto-expanded and the cursor lands on the most recent entry
 
 ## KB Pane (key `3`)
 
-The left panel shows a subtype-folder tree derived from the `type` field (e.g. `kb_summary` → "Summary" folder).
+The left panel shows a subtype-folder tree derived from the `type` field (e.g. `kb_summary` -> "Summary" folder).
 
 | Key | Action |
 |---|---|
@@ -138,14 +123,37 @@ The left panel shows a subtype-folder tree derived from the `type` field (e.g. `
 
 ## Tag Browser (key `4`)
 
-The left panel lists all tags sorted by document count. The right panel shows documents carrying the selected tag.
+The left panel lists all tags sorted alphabetically. The right panel shows documents carrying the selected tag.
 
 | Key | Panel | Action |
 |---|---|---|
+| `Enter` | Left | Activate the filter input — type to narrow the tag list by substring |
+| `Enter` | Left (filter active) | Deactivate filter input, keep filtered list, navigate with `j`/`k` |
+| `Esc` | Left | Clear the filter, restore full tag list |
 | `j` / `k` | Left | Navigate tags |
 | `l` / `h` | — | Switch between tag list and document list |
 | `j` / `k` | Right | Navigate documents for selected tag |
 | `Enter` | Right | Open highlighted document in `$EDITOR` |
+| `o` | Right | Open highlighted document in read mode |
+
+---
+
+## Search Pane (key `5` or `/`)
+
+Two-column layout. Left panel has a search input and three category entries (Journal, KB, Tags). Right panel shows documents for the selected category.
+
+| Key | Panel | Action |
+|---|---|---|
+| `Enter` | Left | Activate the search input — type a query, press Enter to search |
+| `Enter` | Left (input active) | Execute search, deactivate input |
+| `Esc` | Left (input active) | Deactivate input without searching |
+| `Esc` | — | Clear search results and reset to empty state |
+| `j` / `k` | Left | Navigate categories (Journal, KB, Tags) |
+| `l` / `h` | — | Switch between category list and document list |
+| `j` / `k` | Right | Navigate documents in selected category |
+| `Enter` | Right | Open highlighted document in `$EDITOR` |
+| `o` | Right | Open highlighted document in read mode |
+| `p` | Right | Pin / unpin highlighted document |
 
 ---
 

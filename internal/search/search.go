@@ -167,7 +167,7 @@ func scoreDocument(doc document.Document, query string, includeBody bool) (int, 
 	for _, tag := range doc.Frontmatter.Tags {
 		if strings.EqualFold(tag, query) {
 			score += 100
-		} else if fuzzyContains(strings.ToLower(tag), q) {
+		} else if FuzzyContains(strings.ToLower(tag), q) {
 			score += 40
 		}
 	}
@@ -176,7 +176,7 @@ func scoreDocument(doc document.Document, query string, includeBody bool) (int, 
 	title := strings.ToLower(doc.Frontmatter.Title)
 	if strings.Contains(title, q) {
 		score += 50
-	} else if fuzzyContains(title, q) {
+	} else if FuzzyContains(title, q) {
 		score += 25
 	}
 
@@ -184,7 +184,7 @@ func scoreDocument(doc document.Document, query string, includeBody bool) (int, 
 	filename := strings.ToLower(filepath.Base(doc.Path))
 	if strings.Contains(filename, q) {
 		score += 30
-	} else if fuzzyContains(filename, q) {
+	} else if FuzzyContains(filename, q) {
 		score += 15
 	}
 
@@ -194,7 +194,7 @@ func scoreDocument(doc document.Document, query string, includeBody bool) (int, 
 		if idx := strings.Index(body, q); idx != -1 {
 			score += 10
 			snippet = extractSnippet(doc.Body, idx, 80)
-		} else if fuzzyContains(body, q) {
+		} else if FuzzyContains(body, q) {
 			score += 5
 		}
 	}
@@ -202,8 +202,8 @@ func scoreDocument(doc document.Document, query string, includeBody bool) (int, 
 	return score, snippet
 }
 
-// fuzzyContains reports whether all runes of sub appear in s in order.
-func fuzzyContains(s, sub string) bool {
+// FuzzyContains reports whether all runes of sub appear in s in order.
+func FuzzyContains(s, sub string) bool {
 	if sub == "" {
 		return true
 	}

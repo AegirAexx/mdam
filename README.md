@@ -10,8 +10,8 @@ Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https
 - Your editor does the editing — mdam never touches document bodies.
 - mdam handles organization, navigation, and workflow automation.
 
-> **Status: v0.1.0 — early alpha.**
-> The CLI surface, config format, and behavior may change before v1.0.
+> **Status: alpha — usable but unverified.**
+> Everything works for daily use. The CLI surface and config format may still change.
 
 ---
 
@@ -62,7 +62,7 @@ mdam search "nginx"       # Fuzzy search across all documents
 ### TUI layout
 
 ```
- 1: Dashboard   2: Journal   3: KB   4: Tag Browser
+ 1: Dashboard   2: Journal   3: KB   4: Tag Browser   5: Search
 ▶ Overview ─────────────────│─ Todo ─────────────────────────────
  Journal                    │  - [ ] Review PR #42
  2026-04-03                 │  - [ ] Deploy staging
@@ -74,7 +74,7 @@ mdam search "nginx"       # Fuzzy search across all documents
  NORMAL │ main ↑2 │ 3 journal · 1 kb │ /  :  o:read  t:todo  s:scratch  ?  q
 ```
 
-The tab bar at the top shows all four panes. The left column is navigable; the right shows a live glamour-rendered preview. On the Dashboard, the right panel renders `todo.md`.
+The tab bar at the top shows all five panes. The left column is navigable; the right shows a live glamour-rendered preview. On the Dashboard, the right panel renders `todo.md`.
 
 ### Keybindings (summary)
 
@@ -83,18 +83,20 @@ The tab bar at the top shows all four panes. The left column is navigable; the r
 | `j` / `k` | Move down / up |
 | `h` / `l` | Switch panels or expand/collapse tree folders |
 | `Tab` / `Shift+Tab` | Cycle panes forward / backward |
+| `g` / `G` | Jump to top / bottom |
 | `1` | Dashboard |
 | `2` | Journal (month-folder tree) |
 | `3` | KB (subtype-folder tree) |
-| `4` | Tag Browser |
-| `Enter` | Open selected document in `$EDITOR` |
-| `o` | Open selected document in full-screen read mode |
-| `s` | Open scratch pad in `$EDITOR` |
-| `t` | Open todo in `$EDITOR` |
-| `n` | New document (template picker: journal or kb) |
+| `4` | Tag Browser (with substring filter) |
+| `5` / `/` | Search pane |
+| `Enter` | Open in `$EDITOR` / activate filter input |
+| `o` | Full-screen read mode (glamour) |
+| `s` | Scratch pad |
+| `t` | Todo |
+| `n` | New document (template picker) |
 | `p` | Pin / unpin |
 | `e` | Export (strip frontmatter) |
-| `/` | Fuzzy search |
+| `Esc` | Clear filter / search results |
 | `:` | Command mode (`:q`) |
 | `?` | Help overlay |
 | `q` | Quit |
@@ -130,25 +132,15 @@ journal:
 | Todo list | Simple `todo.md` at base root, rendered on the dashboard, opened in `$EDITOR` (`t`) |
 | Scratch pad | Persistent singleton, one keypress away (`s`) |
 | Templates | Two built-in templates (journal, kb); add custom `.md` files to `{base_dir}/.templates/` |
-| Fuzzy search | Across frontmatter fields, filenames, and document bodies |
+| Search pane | Dedicated pane (`5`/`/`) — results categorized by Journal, KB, Tags; documents openable from results |
 | Export | Strip frontmatter and share clean markdown (`e` or `mdam export`) |
 | Git integration | Branch + sync status in the status bar; per-file markers (modified / untracked / staged) in all views |
 | Dashboard | Navigable two-column view: recent journal / pinned / recent docs + glamour-rendered todo.md |
-| Tag browser | All tags with document counts; navigate into any tag to see its documents |
+| Tag browser | All tags with document counts; substring filter to narrow the list; navigate into any tag to see its documents |
 | Read mode | Full-screen glamour-rendered overlay (`o`); vim navigation (`j`/`k`/`d`/`u`/`f`/`b`/`g`/`G`) |
 | Pin / unpin | Bookmark documents (max 10, FIFO eviction); pins persist to `~/.config/mdam/pins.json` (`p`) |
 | Color theming | Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula |
 | Markdown preview | Live glamour-rendered preview in the right panel |
-
----
-
-## Roadmap
-
-The following features are planned but not yet implemented:
-
-- **Search overhaul** — improved fuzzy search UX
-- **Full TODO system** — task categories, priorities, sweep from journal entries, archive
-- **Import pipeline** — inbox directory for dropping in files, validation, auto-fix
 
 ---
 
