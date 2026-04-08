@@ -139,6 +139,27 @@ type: scratch
 	}
 }
 
+func TestParseFrontmatterTimestamps(t *testing.T) {
+	content := `---
+title: Timestamp Test
+tags: []
+created: 2026-03-14T10:00:00Z
+modified: 2026-04-01T00:00:00Z
+type: kb
+---
+`
+	fm, _, err := parseFrontmatter([]byte(content))
+	if err != nil {
+		t.Fatalf("parseFrontmatter() error = %v", err)
+	}
+	if fm.Created.Year() != 2026 || fm.Created.Month() != 3 || fm.Created.Day() != 14 {
+		t.Errorf("Created = %v, want 2026-03-14", fm.Created)
+	}
+	if fm.Modified.Year() != 2026 || fm.Modified.Month() != 4 || fm.Modified.Day() != 1 {
+		t.Errorf("Modified = %v, want 2026-04-01", fm.Modified)
+	}
+}
+
 func TestValidateFrontmatter(t *testing.T) {
 	good := Frontmatter{
 		Title:    "Test",
@@ -255,12 +276,53 @@ type: kb
 	if doc2.Frontmatter.Title != "Updated Note" {
 		t.Errorf("After write, Title = %q, want Updated Note", doc2.Frontmatter.Title)
 	}
+	if doc2.Frontmatter.Type != doc.Frontmatter.Type {
+		t.Errorf("After write, Type = %q, want %q", doc2.Frontmatter.Type, doc.Frontmatter.Type)
+	}
+	if len(doc2.Frontmatter.Tags) != len(doc.Frontmatter.Tags) {
+		t.Errorf("After write, Tags = %v, want %v", doc2.Frontmatter.Tags, doc.Frontmatter.Tags)
+	}
+	if doc2.Frontmatter.Created.Year() != doc.Frontmatter.Created.Year() ||
+		doc2.Frontmatter.Created.Month() != doc.Frontmatter.Created.Month() ||
+		doc2.Frontmatter.Created.Day() != doc.Frontmatter.Created.Day() {
+		t.Errorf("After write, Created = %v, want %v", doc2.Frontmatter.Created, doc.Frontmatter.Created)
+	}
+	if doc2.Frontmatter.Modified.Year() != doc.Frontmatter.Modified.Year() ||
+		doc2.Frontmatter.Modified.Month() != doc.Frontmatter.Modified.Month() ||
+		doc2.Frontmatter.Modified.Day() != doc.Frontmatter.Modified.Day() {
+		t.Errorf("After write, Modified = %v, want %v", doc2.Frontmatter.Modified, doc.Frontmatter.Modified)
+	}
+	if doc2.Body != doc.Body {
+		t.Errorf("After write, Body = %q, want %q", doc2.Body, doc.Body)
+	}
 }
 
 func TestParseFileNotFound(t *testing.T) {
 	_, err := ParseFile("/does/not/exist.md")
 	if err == nil {
 		t.Error("expected error for missing file")
+	}
+}
+
+func TestRenderFrontmatterExtraFields(t *testing.T) {
+	fm := Frontmatter{
+		Type:     "kb",
+		Title:    "Extra Test",
+		Tags:     []string{},
+		Created:  time.Now(),
+		Modified: time.Now(),
+		Extra:    map[string]interface{}{"custom_key": "custom_value"},
+	}
+	out, err := RenderFrontmatter(fm)
+	if err != nil {
+		t.Fatalf("RenderFrontmatter() error = %v", err)
+	}
+	got, _, err := parseFrontmatter([]byte(out))
+	if err != nil {
+		t.Fatalf("parseFrontmatter() error = %v", err)
+	}
+	if got.Extra["custom_key"] != "custom_value" {
+		t.Errorf("Extra[custom_key] = %v, want custom_value", got.Extra["custom_key"])
 	}
 }
 
