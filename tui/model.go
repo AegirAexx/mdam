@@ -205,6 +205,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.preview.Width = rightWidth
 		m.preview.Height = previewHeight
+		// Resize read viewport if terminal is resized while in read mode.
+		m.readViewport.Width = m.width
+		m.readViewport.Height = m.height - 2
 		return m, nil
 
 	// --- Spinner ---
@@ -755,7 +758,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.readReturnView = m.activeView
 				m.readReturnPanel = m.activePanel
 				m.readDocTitle = title
-				m.readViewport = viewport.New(m.width, m.height-3)
+				m.readViewport = viewport.New(m.width, m.height-2)
 				m.mode = ModeRead
 				return m, cmdLoadRead(d.Path, m.theme.GlamourStyle, m.width)
 			}
@@ -774,7 +777,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.readReturnView = m.activeView
 				m.readReturnPanel = m.activePanel
 				m.readDocTitle = title
-				m.readViewport = viewport.New(m.width, m.height-3)
+				m.readViewport = viewport.New(m.width, m.height-2)
 				m.mode = ModeRead
 				return m, cmdLoadRead(d.Path, m.theme.GlamourStyle, m.width)
 			}
@@ -786,7 +789,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.readReturnView = m.activeView
 			m.readReturnPanel = m.activePanel
 			m.readDocTitle = "TODO"
-			m.readViewport = viewport.New(m.width, m.height-3)
+			m.readViewport = viewport.New(m.width, m.height-2)
 			m.mode = ModeRead
 			return m, cmdLoadRead(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width)
 		}
@@ -803,7 +806,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.readReturnView = m.activeView
 				m.readReturnPanel = m.activePanel
 				m.readDocTitle = title
-				m.readViewport = viewport.New(m.width, m.height-3)
+				m.readViewport = viewport.New(m.width, m.height-2)
 				m.mode = ModeRead
 				return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 			}
@@ -814,7 +817,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.readReturnView = m.activeView
 			m.readReturnPanel = m.activePanel
 			m.readDocTitle = m.selectedDocTitle()
-			m.readViewport = viewport.New(m.width, m.height-3)
+			m.readViewport = viewport.New(m.width, m.height-2)
 			m.mode = ModeRead
 			return m, cmdLoadRead(path, m.theme.GlamourStyle, m.width)
 		}

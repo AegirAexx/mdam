@@ -49,7 +49,7 @@ func (m Model) renderTabBar() string {
 }
 
 // renderReadMode renders the full-screen glamour read overlay.
-// Layout: document title header (1 line) | viewport | status bar (1 line).
+// Layout: document title header (1 line) | viewport (height-2) | status bar (1 line).
 func (m Model) renderReadMode() string {
 	var b strings.Builder
 	title := m.readDocTitle

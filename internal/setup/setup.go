@@ -114,6 +114,7 @@ func ScaffoldDirs(baseDir string) error {
 		filepath.Join(baseDir, "journal"),
 		filepath.Join(baseDir, "kb"),
 		filepath.Join(baseDir, ".templates"),
+		filepath.Join(baseDir, ".mdam"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -154,6 +155,111 @@ func EnsureTodo(todoPath string) error {
 	content := fmt.Sprintf("---\ntype: todo\ntitle: TODO\ntags: []\ncreated: %s\nmodified: %s\n---\n", now, now)
 	if err := os.WriteFile(todoPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("writing todo: %w", err)
+	}
+	return nil
+}
+
+// EnsureGettingStarted creates a getting-started KB document if it doesn't exist.
+func EnsureGettingStarted(kbDir string) error {
+	path := filepath.Join(kbDir, "getting-started-with-mdam.md")
+	if _, err := os.Stat(path); err == nil {
+		return nil // already exists
+	}
+	now := time.Now().UTC().Format("2006-01-02")
+	content := fmt.Sprintf(`---
+type: kb
+title: Getting Started with mdam
+tags: [mdam]
+created: %s
+modified: %s
+---
+
+# Getting Started with mdam
+
+mdam is a keyboard-driven TUI for managing markdown documents — journals,
+knowledge base notes, tasks, and scratch pads. It never edits your documents;
+all editing is delegated to your `+"`$EDITOR`"+`.
+
+## Onboarding
+
+mdam expects every document to have YAML frontmatter with these fields in order:
+
+`+"```"+`yaml
+---
+type: kb
+title: My Note
+tags: []
+created: %s
+modified: %s
+---
+`+"```"+`
+
+**type** must be one of: `+"`journal`"+`, `+"`kb`"+`, `+"`todo`"+`, `+"`scratch`"+`.
+Files without valid frontmatter are skipped by the scanner.
+
+To adapt existing markdown files, add the frontmatter block above to each file
+and place them in the appropriate directory (`+"`journal/`"+` or `+"`kb/`"+`).
+
+## KB Subtypes
+
+All knowledge base documents live in `+"`kb/`"+` on disk, but the TUI groups them
+into virtual folders based on the `+"`type`"+` field in frontmatter. Use the
+`+"`kb_`"+` prefix followed by any label you want:
+
+- `+"`type: kb`"+`            → grouped under **KB** (the default)
+- `+"`type: kb_summary`"+`    → grouped under **Summary**
+- `+"`type: kb_cars`"+`       → grouped under **Cars**
+- `+"`type: kb_home-lab`"+`   → grouped under **Home Lab**
+
+The suffix is title-cased automatically (hyphens and underscores become spaces).
+Each subtype gets its own collapsible folder in the KB pane (Pane 3), so you can
+organise notes into as many categories as you like without touching the filesystem.
+
+To create a new subtype, just set the `+"`type`"+` field in a document's frontmatter —
+no configuration or directory creation needed.
+
+## Directory Layout
+
+- `+"`journal/`"+`    — daily logs, one file per day (YYYY-MM-DD.md)
+- `+"`kb/`"+`         — permanent notes and knowledge (subtype folders are virtual)
+- `+"`todo.md`"+`     — rolling task list (open with **t**)
+- `+"`scratch.md`"+`  — persistent scratch pad (open with **s**)
+- `+"`.templates/`"+` — document templates with variable interpolation
+
+## Templates
+
+Templates live in `+"`.templates/`"+` and use `+"`{{variable}}`"+` placeholders:
+
+- `+"`{{title}}`"+`      — prompted at creation
+- `+"`{{date_short}}`"+` — today's date (YYYY-MM-DD)
+- `+"`{{date:FORMAT}}`"+` — custom Go time format (e.g. `+"`{{date:Monday - January 02 2006}}`"+`)
+- `+"`{{author}}`"+`     — from config
+- `+"`{{tags}}`"+`       — prompted at creation
+
+Press **n** in the TUI to create a document from a template.
+
+## Quick Reference
+
+| Key       | Action                     |
+|-----------|----------------------------|
+| 1–5       | Switch pane                |
+| j / k     | Move down / up             |
+| h / l     | Switch panel / expand tree |
+| Enter     | Open in editor             |
+| o         | Read mode (rendered view)  |
+| t / s     | Open todo / scratch        |
+| n         | New document               |
+| p         | Pin / unpin                |
+| ?         | Help overlay               |
+| q         | Quit                       |
+
+## Deleting This Document
+
+This document is scaffolded on first run. Feel free to delete, modify, or
+expand it — mdam will not recreate it.
+`, now, now, now, now)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("writing getting-started doc: %w", err)
 	}
 	return nil
 }

@@ -60,7 +60,9 @@ func cmdCreateDoc(t tmpl.Template, vars map[string]string, cfg config.Config) te
 		}
 
 		// Determine destination directory by document type.
-		docType := vars["type"]
+		// Type is a literal in the template frontmatter, not a {{variable}},
+		// so we extract it from the template content rather than vars.
+		docType := tmpl.TemplateType(t.Content)
 		var destDir string
 		switch docType {
 		case "journal":

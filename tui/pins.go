@@ -12,6 +12,7 @@ const maxPins = 10
 // loadPins reads pinned document paths from path.
 // Returns an empty slice (not an error) if the file does not exist.
 // The slice order is the insertion order (oldest first).
+// Stale entries (files that no longer exist on disk) are pruned automatically.
 func loadPins(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -20,11 +21,22 @@ func loadPins(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading pins: %w", err)
 	}
-	var paths []string
-	if err := json.Unmarshal(data, &paths); err != nil {
+	var raw []string
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing pins: %w", err)
 	}
-	return paths, nil
+	// Prune stale entries whose files no longer exist.
+	live := raw[:0]
+	for _, p := range raw {
+		if _, err := os.Stat(p); err == nil {
+			live = append(live, p)
+		}
+	}
+	if len(live) != len(raw) {
+		// Persist the pruned list so stale entries don't accumulate.
+		_ = savePins(path, live)
+	}
+	return live, nil
 }
 
 // savePins writes the pinned paths to path as a JSON array preserving order.

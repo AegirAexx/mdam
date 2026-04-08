@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -19,7 +20,16 @@ func TestSaveAndLoadPinsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pins.json")
 
-	pins := []string{"/notes/a.md", "/notes/b.md"}
+	// Create real files so the auto-prune doesn't remove them.
+	aPath := filepath.Join(dir, "a.md")
+	bPath := filepath.Join(dir, "b.md")
+	for _, f := range []string{aPath, bPath} {
+		if err := os.WriteFile(f, []byte("test"), 0o644); err != nil {
+			t.Fatalf("creating test file: %v", err)
+		}
+	}
+
+	pins := []string{aPath, bPath}
 	if err := savePins(path, pins); err != nil {
 		t.Fatalf("savePins: %v", err)
 	}
@@ -29,7 +39,7 @@ func TestSaveAndLoadPinsRoundTrip(t *testing.T) {
 		t.Fatalf("loadPins: %v", err)
 	}
 	if len(loaded) != len(pins) {
-		t.Errorf("loaded %d pins, want %d", len(loaded), len(pins))
+		t.Fatalf("loaded %d pins, want %d", len(loaded), len(pins))
 	}
 	for i, p := range pins {
 		if loaded[i] != p {
@@ -83,6 +93,42 @@ func TestTogglePinPreservesOrder(t *testing.T) {
 		if result[i] != p {
 			t.Errorf("result[%d] = %q, want %q", i, result[i], p)
 		}
+	}
+}
+
+func TestLoadPinsPrunesStaleEntries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pins.json")
+
+	// One real file, one that doesn't exist.
+	realPath := filepath.Join(dir, "real.md")
+	if err := os.WriteFile(realPath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("creating test file: %v", err)
+	}
+	stalePath := filepath.Join(dir, "gone.md")
+
+	if err := savePins(path, []string{realPath, stalePath}); err != nil {
+		t.Fatalf("savePins: %v", err)
+	}
+
+	loaded, err := loadPins(path)
+	if err != nil {
+		t.Fatalf("loadPins: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 pin after prune, got %d", len(loaded))
+	}
+	if loaded[0] != realPath {
+		t.Errorf("expected %q, got %q", realPath, loaded[0])
+	}
+
+	// Verify pruned list was persisted.
+	reloaded, err := loadPins(path)
+	if err != nil {
+		t.Fatalf("loadPins after prune: %v", err)
+	}
+	if len(reloaded) != 1 {
+		t.Errorf("persisted pins should have 1 entry, got %d", len(reloaded))
 	}
 }
 

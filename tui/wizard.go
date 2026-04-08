@@ -440,6 +440,9 @@ func (m WizardModel) writeAndScaffold() error {
 	if err := setup.EnsureTodo(filepath.Join(m.baseDir, "todo.md")); err != nil {
 		return fmt.Errorf("ensuring todo: %w", err)
 	}
+	if err := setup.EnsureGettingStarted(filepath.Join(m.baseDir, "kb")); err != nil {
+		return fmt.Errorf("ensuring getting-started doc: %w", err)
+	}
 	return nil
 }
 

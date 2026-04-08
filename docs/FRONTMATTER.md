@@ -93,6 +93,22 @@ Caller-supplied variables (e.g. `{{title}}`) are resolved first, then `{{date:FO
 |---|---|
 | `journal` | `{base_dir}/journal/YYYY-MM-DD.md` |
 | `kb` | `{base_dir}/kb/{kebab-title}.md` |
+| `kb_*` | `{base_dir}/kb/{kebab-title}.md` (grouped by subtype in TUI) |
 | `scratch` | `{base_dir}/scratch.md` |
 | `todo` | `{base_dir}/todo.md` |
 | `unsorted` | `{base_dir}/{kebab-title}.md` |
+
+## KB subtypes
+
+All `kb` documents live in `kb/` on disk. The TUI groups them into virtual folders
+based on the `type` field. Use the `kb_` prefix followed by any label:
+
+| `type` field | TUI folder |
+|---|---|
+| `kb` | KB |
+| `kb_summary` | Summary |
+| `kb_cars` | Cars |
+| `kb_home-lab` | Home Lab |
+
+The suffix is title-cased automatically — hyphens and underscores become spaces.
+No configuration or directory creation is needed; just set the `type` field.
