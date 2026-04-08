@@ -142,6 +142,16 @@ Some plain text that isn't a task.
 	if tasks[2].Status != StatusCancelled {
 		t.Errorf("tasks[2].Status = %q, want cancelled", tasks[2].Status)
 	}
+	// Verify .Text: checkbox prefix and metadata markers are stripped.
+	if tasks[0].Text != "Open task" {
+		t.Errorf("tasks[0].Text = %q, want %q", tasks[0].Text, "Open task")
+	}
+	if tasks[1].Text != "Done task" {
+		t.Errorf("tasks[1].Text = %q, want %q", tasks[1].Text, "Done task")
+	}
+	if tasks[2].Text != "Cancelled task" {
+		t.Errorf("tasks[2].Text = %q, want %q", tasks[2].Text, "Cancelled task")
+	}
 }
 
 func TestTaskHelpers(t *testing.T) {
@@ -366,6 +376,38 @@ func TestReadTasks(t *testing.T) {
 	}
 	if len(tasks) != 0 {
 		t.Errorf("ReadTasks() on missing file = %v, want empty", tasks)
+	}
+
+	// Happy path: file with mixed task statuses.
+	content := `# Tasks
+
+- [ ] Buy milk
+- [x] Deploy to prod
+- [-] Clean up logs
+- [ ] ~Refactor handler~
+`
+	todoPath := filepath.Join(dir, "todo.md")
+	if err := os.WriteFile(todoPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err = ReadTasks(todoPath)
+	if err != nil {
+		t.Fatalf("ReadTasks() error = %v", err)
+	}
+	if len(tasks) != 4 {
+		t.Fatalf("ReadTasks() = %d tasks, want 4", len(tasks))
+	}
+	if tasks[0].Status != StatusOpen || tasks[0].Text != "Buy milk" {
+		t.Errorf("tasks[0] = {%q, %q}, want {open, Buy milk}", tasks[0].Status, tasks[0].Text)
+	}
+	if tasks[1].Status != StatusDone || tasks[1].Text != "Deploy to prod" {
+		t.Errorf("tasks[1] = {%q, %q}, want {done, Deploy to prod}", tasks[1].Status, tasks[1].Text)
+	}
+	if tasks[2].Status != StatusCancelled || tasks[2].Text != "Clean up logs" {
+		t.Errorf("tasks[2] = {%q, %q}, want {cancelled, Clean up logs}", tasks[2].Status, tasks[2].Text)
+	}
+	if tasks[3].Status != StatusInProgress {
+		t.Errorf("tasks[3].Status = %q, want in-progress", tasks[3].Status)
 	}
 }
 
