@@ -2,23 +2,17 @@
 
 mdam is a keyboard-driven terminal TUI for managing a personal markdown document tree — journals, knowledge base, scratch notes.
 
-**Current branch:** `fix/dogfooding-round-2`
+**Current branch:** `fix/kb-tree-index-panic`
 
 ---
 
 ## Current State
 
-All core features are implemented and working. The application is in active daily use (dogfooding). Second round of dogfooding fixes landed on this branch.
+All core features are implemented and working. The application is in active daily use (dogfooding). This branch fixes a critical KB tree panic found during dogfooding.
 
 ### What changed this session
 
-- **Template overwriting fix** — `WriteBuiltins()` now skips any template file that already exists on disk, never overwriting user customizations.
-- **New default journal template** — Hours, Work Done, Daily Log/Notes, TODO sections.
-- **KB docs saved to correct directory** — `cmdCreateDoc` now uses `tmpl.TemplateType(t.Content)` to extract the document type from template frontmatter instead of `vars["type"]` (which was always empty). KB docs now correctly go to `kb/`.
-- **Read mode off-by-one fix** — Viewport height changed from `height-3` to `height-2`. Also added resize handling for the read viewport on terminal resize.
-- **pins.json moved to `{base_dir}/.mdam/`** — Lives in version control now. `PinsPath()` returns `{BaseDir}/.mdam/pins.json`. Stale pins (deleted files) are auto-pruned on load.
-- **Getting-started KB doc** — `EnsureGettingStarted()` seeds `kb/getting-started-with-mdam.md` on first run. Covers onboarding, frontmatter, directory layout, KB subtypes, templates, keybinding quick reference.
-- **Docs updated** — README, FRONTMATTER.md updated for `.mdam/` dir, pins location, KB subtypes, getting-started doc.
+- **KB tree index-out-of-bounds panic fix** — Expanding a folder below a large already-expanded folder caused `kbCursor` to go stale (the expand handler collapses all other folders but never relocated the cursor). The next `h` keypress accessed `rows[i]` out of bounds and panicked. Fixed both the `l` handler (rebuild rows and relocate cursor after expand) and the `h` handler (clamp cursor before any slice access). Two new tests in `tui/view_kb_test.go`.
 
 ### Features on ice
 
