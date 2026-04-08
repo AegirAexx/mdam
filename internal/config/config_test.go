@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -122,5 +123,27 @@ func TestLoadDefaultsBaseDir(t *testing.T) {
 	}
 	if cfg.BaseDir != "" {
 		t.Errorf("BaseDir default = %q, want empty string", cfg.BaseDir)
+	}
+}
+
+func TestDefaultConfigPath(t *testing.T) {
+	path, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error = %v", err)
+	}
+	if !strings.Contains(path, "mdam") || !strings.HasSuffix(path, "config.yml") {
+		t.Errorf("DefaultConfigPath() = %q, want path containing mdam/config.yml", path)
+	}
+}
+
+func TestLoadFromInvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.yml")
+	if err := os.WriteFile(path, []byte("not: valid: yaml: [["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadFrom(path)
+	if err == nil {
+		t.Error("LoadFrom() with invalid YAML should return error, got nil")
 	}
 }
