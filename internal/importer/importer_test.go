@@ -192,14 +192,20 @@ func TestScaffoldFrontmatter(t *testing.T) {
 	}
 
 	fm := scaffoldFrontmatter("my-note", info.ModTime())
-	if fm.Title == "" {
-		t.Error("scaffoldFrontmatter() Title is empty")
+	if fm.Title != "My note" {
+		t.Errorf("scaffoldFrontmatter() Title = %q, want %q", fm.Title, "My note")
 	}
 	if fm.Type != "unsorted" {
 		t.Errorf("scaffoldFrontmatter() Type = %q, want unsorted", fm.Type)
 	}
 	if fm.Tags == nil {
 		t.Error("Tags is nil")
+	}
+	if fm.Created.IsZero() {
+		t.Error("Created is zero")
+	}
+	if fm.Modified.IsZero() {
+		t.Error("Modified is zero")
 	}
 }
 
