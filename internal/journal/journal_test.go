@@ -168,7 +168,14 @@ func TestListByMonth(t *testing.T) {
 		t.Fatalf("ListByMonth() error = %v", err)
 	}
 	if len(paths) != 2 {
-		t.Errorf("ListByMonth() returned %d entries, want 2", len(paths))
+		t.Fatalf("ListByMonth() returned %d entries, want 2", len(paths))
+	}
+	// Newest-first: 2026-03-14 before 2026-03-01.
+	if !strings.Contains(paths[0], "2026-03-14") {
+		t.Errorf("paths[0] = %q, want 2026-03-14 (newest first)", paths[0])
+	}
+	if !strings.Contains(paths[1], "2026-03-01") {
+		t.Errorf("paths[1] = %q, want 2026-03-01", paths[1])
 	}
 }
 
@@ -217,7 +224,14 @@ func TestScaffoldFrontmatter(t *testing.T) {
 	if !strings.Contains(fm.Title, "2026-03-14") {
 		t.Errorf("Title = %q, does not contain date", fm.Title)
 	}
-	if fm.Tags == nil {
-		t.Error("Tags is nil, want empty slice")
+	if fm.Tags == nil || len(fm.Tags) != 0 {
+		t.Errorf("Tags = %v, want empty non-nil slice", fm.Tags)
+	}
+	now := time.Now()
+	if fm.Created.IsZero() || fm.Created.After(now.Add(5*time.Second)) {
+		t.Errorf("Created = %v, want near-current non-zero time", fm.Created)
+	}
+	if fm.Modified.IsZero() || fm.Modified.After(now.Add(5*time.Second)) {
+		t.Errorf("Modified = %v, want near-current non-zero time", fm.Modified)
 	}
 }

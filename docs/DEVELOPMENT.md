@@ -71,6 +71,26 @@ mdam/
 - Every function gets a table-driven test in a `_test.go` file.
 - Use only the `testing` package — no third-party assertion libraries.
 - TUI tests use `stripANSI()` for assertions against rendered output (lipgloss adds ANSI codes).
+- `internal/export` and `internal/template` are the gold-standard packages — use their patterns as reference.
+- Tests must assert meaningful values, not just `err == nil`. Round-trips must read back and compare fields.
+
+## Coverage (2026-04-08)
+
+| Package | Coverage |
+|---------|----------|
+| `internal/document` | 92.1% |
+| `internal/search` | 91.1% |
+| `internal/export` | 88.0% |
+| `internal/template` | 87.9% |
+| `internal/todo` | 88.3% |
+| `internal/journal` | 87.3% |
+| `internal/config` | 84.4% |
+| `internal/importer` | 78.9% |
+| `internal/setup` | 79.0% |
+| `internal/git` | 73.3% |
+| `tui` | 57.9% |
+| `internal/cli` | 25.7% |
+| **total** | **65.5%** |
 
 ## External dependencies (go.mod)
 

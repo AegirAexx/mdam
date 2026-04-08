@@ -3,8 +3,11 @@ package search
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/AegirAexx/mdam/internal/document"
 )
 
 // makeDoc writes a test document to dir and returns its path.
@@ -214,5 +217,155 @@ func TestSearchWithBody(t *testing.T) {
 	}
 	if results[0].Snippet == "" {
 		t.Error("SearchWithBody() should set Snippet for body match")
+	}
+	if !strings.Contains(results[0].Snippet, "quick") {
+		t.Errorf("Snippet = %q, want it to contain query term", results[0].Snippet)
+	}
+}
+
+func makeTestDoc(path, title string, tags []string, body string) document.Document {
+	return document.Document{
+		Path: path,
+		Frontmatter: document.Frontmatter{
+			Title:    title,
+			Tags:     tags,
+			Type:     "kb",
+			Created:  time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
+			Modified: time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
+		},
+		Body: body,
+	}
+}
+
+func TestScoreDocument(t *testing.T) {
+	tests := []struct {
+		name        string
+		doc         document.Document
+		query       string
+		includeBody bool
+		wantMinScore int
+		wantMaxScore int
+	}{
+		{
+			name:         "title match scores ≥50",
+			doc:          makeTestDoc("/docs/nginx-setup.md", "Nginx Setup", []string{}, ""),
+			query:        "nginx",
+			includeBody:  false,
+			wantMinScore: 50,
+			wantMaxScore: 999,
+		},
+		{
+			name:         "body-only match scores less than title match",
+			doc:          makeTestDoc("/docs/note.md", "A Note", []string{}, "nginx is mentioned here"),
+			query:        "nginx",
+			includeBody:  true,
+			wantMinScore: 1,
+			wantMaxScore: 49,
+		},
+		{
+			name:         "tag exact match scores ≥100",
+			doc:          makeTestDoc("/docs/note.md", "A Note", []string{"nginx"}, ""),
+			query:        "nginx",
+			includeBody:  false,
+			wantMinScore: 100,
+			wantMaxScore: 999,
+		},
+		{
+			name:         "empty query returns zero",
+			doc:          makeTestDoc("/docs/note.md", "Nginx Setup", []string{"nginx"}, "nginx body"),
+			query:        "",
+			includeBody:  true,
+			wantMinScore: 0,
+			wantMaxScore: 0,
+		},
+		{
+			name:         "empty body with title match scores above zero",
+			doc:          makeTestDoc("/docs/nginx.md", "Nginx Guide", []string{}, ""),
+			query:        "nginx",
+			includeBody:  true,
+			wantMinScore: 1,
+			wantMaxScore: 999,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, _ := scoreDocument(tt.doc, tt.query, tt.includeBody)
+			if score < tt.wantMinScore || score > tt.wantMaxScore {
+				t.Errorf("scoreDocument() = %d, want [%d, %d]", score, tt.wantMinScore, tt.wantMaxScore)
+			}
+		})
+	}
+}
+
+func TestExtractSnippet(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 20) // 200 chars
+
+	tests := []struct {
+		name          string
+		s             string
+		pos           int
+		maxLen        int
+		wantPrefix    bool // expect leading "…"
+		wantSuffix    bool // expect trailing "…"
+		wantEmpty     bool
+	}{
+		{
+			name:       "match at start — no leading ellipsis",
+			s:          long,
+			pos:        0,
+			maxLen:     80,
+			wantPrefix: false,
+			wantSuffix: true,
+		},
+		{
+			name:       "match in middle — both ellipses",
+			s:          long,
+			pos:        100,
+			maxLen:     80,
+			wantPrefix: true,
+			wantSuffix: true,
+		},
+		{
+			name:       "match near end — no trailing ellipsis",
+			s:          long,
+			pos:        190,
+			maxLen:     80,
+			wantPrefix: true,
+			wantSuffix: false,
+		},
+		{
+			name:       "body shorter than window — no ellipses",
+			s:          "short body",
+			pos:        5,
+			maxLen:     80,
+			wantPrefix: false,
+			wantSuffix: false,
+		},
+		{
+			name:      "empty body returns empty string",
+			s:         "",
+			pos:       0,
+			maxLen:    80,
+			wantEmpty: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractSnippet(tt.s, tt.pos, tt.maxLen)
+			if tt.wantEmpty {
+				if got != "" {
+					t.Errorf("extractSnippet() = %q, want empty", got)
+				}
+				return
+			}
+			hasPrefix := strings.HasPrefix(got, "…")
+			hasSuffix := strings.HasSuffix(got, "…")
+			if hasPrefix != tt.wantPrefix {
+				t.Errorf("extractSnippet() prefix ellipsis = %v, want %v (got %q)", hasPrefix, tt.wantPrefix, got)
+			}
+			if hasSuffix != tt.wantSuffix {
+				t.Errorf("extractSnippet() suffix ellipsis = %v, want %v (got %q)", hasSuffix, tt.wantSuffix, got)
+			}
+		})
 	}
 }
