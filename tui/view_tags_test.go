@@ -174,6 +174,25 @@ func TestVisibleTagEntriesWithoutFilter(t *testing.T) {
 	}
 }
 
+func TestBuildTagIndexTieBreak(t *testing.T) {
+	// Three tags, each appearing exactly once — alphabetical order required.
+	docs := []search.Result{
+		{Path: "/c.md", Frontmatter: document.Frontmatter{Tags: []string{"ccc"}}},
+		{Path: "/a.md", Frontmatter: document.Frontmatter{Tags: []string{"aaa"}}},
+		{Path: "/b.md", Frontmatter: document.Frontmatter{Tags: []string{"bbb"}}},
+	}
+	entries := buildTagIndex(docs)
+	if len(entries) != 3 {
+		t.Fatalf("buildTagIndex() returned %d entries, want 3", len(entries))
+	}
+	want := []string{"aaa", "bbb", "ccc"}
+	for i, w := range want {
+		if entries[i].Name != w {
+			t.Errorf("entries[%d].Name = %q, want %q", i, entries[i].Name, w)
+		}
+	}
+}
+
 // fakePinnedDocs are used for dashboard tests.
 var fakePinnedDocs = []search.Result{
 	{
