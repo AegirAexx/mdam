@@ -27,9 +27,12 @@ func initRepo(t *testing.T) string {
 }
 
 func TestIsAvailable(t *testing.T) {
-	// git should be available in the test environment.
-	if !IsAvailable() {
-		t.Skip("git not available")
+	got := IsAvailable()
+	if !got {
+		t.Skip("git not on PATH, skipping")
+	}
+	if !got {
+		t.Error("IsAvailable() = false, want true")
 	}
 }
 

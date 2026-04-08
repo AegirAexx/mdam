@@ -276,6 +276,33 @@ func TestEnsureScratch(t *testing.T) {
 	}
 }
 
+func TestEnsureGettingStarted(t *testing.T) {
+	kbDir := t.TempDir()
+	target := filepath.Join(kbDir, "getting-started-with-mdam.md")
+
+	// Creates the file.
+	if err := EnsureGettingStarted(kbDir); err != nil {
+		t.Fatalf("EnsureGettingStarted() error = %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("reading getting-started file: %v", err)
+	}
+	if !strings.Contains(string(data), "type: kb") {
+		t.Errorf("EnsureGettingStarted() missing type: kb in %q", string(data))
+	}
+
+	// Second call must not overwrite existing file.
+	original := string(data)
+	if err := EnsureGettingStarted(kbDir); err != nil {
+		t.Fatalf("EnsureGettingStarted() second call error = %v", err)
+	}
+	data2, _ := os.ReadFile(target)
+	if original != string(data2) {
+		t.Error("EnsureGettingStarted() second call overwrote existing file")
+	}
+}
+
 func TestRun(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
