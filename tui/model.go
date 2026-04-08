@@ -506,11 +506,25 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				delete(m.kbExpanded, k2)
 			}
 			m.kbExpanded[key] = true
+			// Rebuild and relocate cursor to the expanded folder.
+			rows = buildKBRows(m.docs, m.kbExpanded)
+			for i, r := range rows {
+				if r.isFolder && r.subtype == key {
+					m.kbCursor = i
+					break
+				}
+			}
 		}
 		// File row: l is a no-op (already inside an open folder).
 	case (k == "h" || k == "left") && m.activeView == ViewKB && m.activePanel == PanelFiles:
 		rows := buildKBRows(m.docs, m.kbExpanded)
-		if m.kbCursor < len(rows) && rows[m.kbCursor].isFolder {
+		if m.kbCursor >= len(rows) {
+			m.kbCursor = len(rows) - 1
+		}
+		if m.kbCursor < 0 {
+			break
+		}
+		if rows[m.kbCursor].isFolder {
 			delete(m.kbExpanded, rows[m.kbCursor].subtype)
 		} else {
 			// File row: collapse parent subtype folder and jump cursor to it.

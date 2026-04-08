@@ -127,3 +127,84 @@ func TestKBFilePanel(t *testing.T) {
 		t.Errorf("panel missing file title: %q", rendered)
 	}
 }
+
+// TestKBExpandRelocatesCursor verifies that expanding a folder below a large
+// expanded folder relocates kbCursor to the newly-expanded folder, preventing
+// an index-out-of-bounds panic on the next collapse.
+func TestKBExpandRelocatesCursor(t *testing.T) {
+	// Build a doc set where "Summary" has many children and "Vps" has few.
+	var docs []search.Result
+	for i := 0; i < 14; i++ {
+		docs = append(docs, makeKBDoc("kb_summary", string(rune('A'+i)), "/kb/s"+string(rune('a'+i))+".md"))
+	}
+	docs = append(docs, makeKBDoc("kb_vps", "Server1", "/kb/v1.md"))
+	docs = append(docs, makeKBDoc("kb_vps", "Server2", "/kb/v2.md"))
+
+	m := newTestModel()
+	m.width = 80
+	m.height = 24
+	m.docs = docs
+	m.activeView = ViewKB
+	m.activePanel = PanelFiles
+	m.kbExpanded = map[string]bool{"Summary": true}
+
+	// With Summary expanded: row 0 = Summary folder, rows 1-14 = files,
+	// row 15 = Vps folder. Place cursor on Vps.
+	rows := buildKBRows(m.docs, m.kbExpanded)
+	vpsFolderIdx := -1
+	for i, r := range rows {
+		if r.isFolder && r.subtype == "Vps" {
+			vpsFolderIdx = i
+			break
+		}
+	}
+	if vpsFolderIdx < 0 {
+		t.Fatal("Vps folder not found in rows")
+	}
+	m.kbCursor = vpsFolderIdx
+
+	// Expand Vps (collapses Summary, rebuilds list, relocates cursor).
+	m = sendKey(m, "l")
+
+	newRows := buildKBRows(m.docs, m.kbExpanded)
+	if m.kbCursor >= len(newRows) {
+		t.Fatalf("kbCursor %d out of range after expand (len %d)", m.kbCursor, len(newRows))
+	}
+	if !newRows[m.kbCursor].isFolder || newRows[m.kbCursor].subtype != "Vps" {
+		t.Errorf("expected cursor on Vps folder, got %+v", newRows[m.kbCursor])
+	}
+
+	// Collapse via h — must not panic.
+	m = sendKey(m, "h")
+
+	finalRows := buildKBRows(m.docs, m.kbExpanded)
+	if m.kbCursor >= len(finalRows) {
+		t.Fatalf("kbCursor %d out of range after collapse (len %d)", m.kbCursor, len(finalRows))
+	}
+}
+
+// TestKBCollapseClampsStaleCursor verifies that pressing h with a stale
+// (out-of-bounds) kbCursor clamps it instead of panicking.
+func TestKBCollapseClampsStaleCursor(t *testing.T) {
+	docs := []search.Result{
+		makeKBDoc("kb_summary", "Alpha", "/kb/alpha.md"),
+		makeKBDoc("kb", "Base", "/kb/base.md"),
+	}
+
+	m := newTestModel()
+	m.width = 80
+	m.height = 24
+	m.docs = docs
+	m.activeView = ViewKB
+	m.activePanel = PanelFiles
+	m.kbExpanded = map[string]bool{}
+	m.kbCursor = 20 // deliberately stale / out of bounds
+
+	// Must not panic.
+	m = sendKey(m, "h")
+
+	rows := buildKBRows(m.docs, m.kbExpanded)
+	if m.kbCursor < 0 || m.kbCursor >= len(rows) {
+		t.Fatalf("kbCursor %d out of range after clamp (len %d)", m.kbCursor, len(rows))
+	}
+}
