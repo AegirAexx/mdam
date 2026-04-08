@@ -89,9 +89,8 @@ func TestNerdFontsDefault(t *testing.T) {
 }
 
 func TestPinsPath(t *testing.T) {
-	home, _ := os.UserHomeDir()
-	cfg := Config{}
-	want := filepath.Join(home, ".config", "mdam", "pins.json")
+	cfg := Config{BaseDir: "/base"}
+	want := filepath.Join("/base", ".mdam", "pins.json")
 	if got := cfg.PinsPath(); got != want {
 		t.Errorf("PinsPath() = %q, want %q", got, want)
 	}

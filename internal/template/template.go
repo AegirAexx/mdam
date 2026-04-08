@@ -165,18 +165,15 @@ func BuiltinTemplates() map[string]string {
 }
 
 // WriteBuiltins writes built-in templates to the given directory. An existing
-// file is overwritten only when its content differs from the current built-in,
-// so user-customised templates that match the built-in are left alone and
-// stale copies from older versions are updated automatically.
+// file is never overwritten — user customisations are always preserved.
 func WriteBuiltins(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating templates directory: %w", err)
 	}
 	for name, content := range BuiltinTemplates() {
 		path := filepath.Join(dir, name+".md")
-		existing, err := os.ReadFile(path)
-		if err == nil && string(existing) == content {
-			continue // already up-to-date
+		if _, err := os.Stat(path); err == nil {
+			continue // already exists — do not overwrite
 		}
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("writing template %s: %w", name, err)
@@ -195,9 +192,21 @@ modified: {{date_short}}
 
 # {{date:Monday - January 02 2006}}
 
-## Notes
+---
 
-## TODOs
+## Hours
+
+Start - Finish
+
+## Work Done
+
+- placeholder
+
+## Daily Log
+
+### Notes
+
+## TODO
 
 - [ ]
 `

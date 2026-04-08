@@ -42,12 +42,13 @@ On first launch, mdam detects no configuration and starts a TUI setup wizard tha
 
 The wizard creates:
 
-- Directory structure: `journal/`, `kb/`, `.templates/`
+- Directory structure: `journal/`, `kb/`, `.templates/`, `.mdam/`
 - Singleton files: `todo.md`, `scratch.md` (at base root)
+- A getting-started KB document in `kb/` covering onboarding and usage
 - Config at `~/.config/mdam/config.yml`
 - Built-in templates: `journal.md`, `kb.md` in `.templates/`
 
-Setup is fully idempotent — re-running won't overwrite existing files.
+Setup is fully idempotent — re-running won't overwrite existing files or templates.
 
 ---
 
@@ -138,7 +139,7 @@ journal:
 | Dashboard | Navigable two-column view: recent journal / pinned / recent docs + glamour-rendered todo.md |
 | Tag browser | All tags with document counts; substring filter to narrow the list; navigate into any tag to see its documents |
 | Read mode | Full-screen glamour-rendered overlay (`o`); vim navigation (`j`/`k`/`d`/`u`/`f`/`b`/`g`/`G`) |
-| Pin / unpin | Bookmark documents (max 10, FIFO eviction); pins persist to `~/.config/mdam/pins.json` (`p`) |
+| Pin / unpin | Bookmark documents (max 10, FIFO eviction); pins persist to `{base_dir}/.mdam/pins.json` (`p`) |
 | Color theming | Five built-in palettes: tokyonight, nord, gruvbox, catppuccin, dracula |
 | Markdown preview | Live glamour-rendered preview in the right panel |
 

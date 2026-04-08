@@ -127,9 +127,14 @@ func (c Config) ScratchPath() string {
 	return filepath.Join(c.BaseDir, "scratch.md")
 }
 
+// MdamDir returns the .mdam metadata directory within BaseDir.
+// This directory lives in version control alongside the managed documents.
+func (c Config) MdamDir() string {
+	return filepath.Join(c.BaseDir, ".mdam")
+}
+
 // PinsPath returns the path for the pinned documents file.
-// Stored alongside the config, not in BaseDir, so pins survive BaseDir changes.
+// Stored in {BaseDir}/.mdam/ so pins live in version control.
 func (c Config) PinsPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "mdam", "pins.json")
+	return filepath.Join(c.MdamDir(), "pins.json")
 }
