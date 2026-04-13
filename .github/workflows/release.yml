@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          VERSION="${{ github.ref_name }}"
+          LDFLAGS="-X main.version=${VERSION}"
+          mkdir dist
+
+          GOOS=linux  GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/mdam-linux-amd64  ./cmd/mdam
+          GOOS=linux  GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/mdam-linux-arm64  ./cmd/mdam
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/mdam-darwin-amd64 ./cmd/mdam
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/mdam-darwin-arm64 ./cmd/mdam
+
+          cd dist && sha256sum * > checksums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

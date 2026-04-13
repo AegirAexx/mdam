@@ -25,6 +25,12 @@ launch the interactive TUI (coming in Phase 2).`,
 	},
 }
 
+// SetVersion injects the build-time version string into the root command,
+// enabling the --version flag and "mdam version" subcommand.
+func SetVersion(v string) {
+	rootCmd.Version = v
+}
+
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()

@@ -10,9 +10,6 @@ Inspired by [lazygit](https://github.com/jesseduffield/lazygit) and [atac](https
 - Your editor does the editing — mdam never touches document bodies.
 - mdam handles organization, navigation, and workflow automation.
 
-> **Status: alpha — usable but unverified.**
-> Everything works for daily use. The CLI surface and config format may still change.
-
 ---
 
 ## Installation

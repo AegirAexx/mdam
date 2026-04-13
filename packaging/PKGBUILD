@@ -1,0 +1,28 @@
+# Maintainer: AegirAexx
+pkgname=mdam
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Keyboard-centric TUI tool for managing markdown documents and journals"
+arch=('x86_64' 'aarch64')
+url="https://github.com/AegirAexx/mdam"
+license=('MIT')
+depends=('git')
+makedepends=('go')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+b2sums=('SKIP')
+
+build() {
+    cd "${pkgname}-${pkgver}"
+    export CGO_ENABLED=0
+    go build \
+        -ldflags "-X main.version=v${pkgver}" \
+        -o mdam \
+        ./cmd/mdam
+}
+
+package() {
+    cd "${pkgname}-${pkgver}"
+    install -Dm755 mdam      "${pkgdir}/usr/bin/mdam"
+    install -Dm644 LICENSE   "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
