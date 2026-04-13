@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadPinsMissingFileReturnsEmpty(t *testing.T) {
-	pins, err := loadPins("/does/not/exist/pins.json")
+	pins, err := loadPins("/does/not/exist/pins.json", "/base")
 	if err != nil {
 		t.Fatalf("loadPins missing file: unexpected error: %v", err)
 	}
@@ -30,11 +30,11 @@ func TestSaveAndLoadPinsRoundTrip(t *testing.T) {
 	}
 
 	pins := []string{aPath, bPath}
-	if err := savePins(path, pins); err != nil {
+	if err := savePins(path, dir, pins); err != nil {
 		t.Fatalf("savePins: %v", err)
 	}
 
-	loaded, err := loadPins(path)
+	loaded, err := loadPins(path, dir)
 	if err != nil {
 		t.Fatalf("loadPins: %v", err)
 	}
@@ -45,6 +45,67 @@ func TestSaveAndLoadPinsRoundTrip(t *testing.T) {
 		if loaded[i] != p {
 			t.Errorf("loaded[%d] = %q, want %q", i, loaded[i], p)
 		}
+	}
+}
+
+func TestSaveAndLoadPinsRelativePaths(t *testing.T) {
+	dir := t.TempDir()
+	pinsPath := filepath.Join(dir, "pins.json")
+
+	// Create real files under the base dir.
+	aPath := filepath.Join(dir, "journal", "a.md")
+	if err := os.MkdirAll(filepath.Dir(aPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(aPath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("creating test file: %v", err)
+	}
+
+	if err := savePins(pinsPath, dir, []string{aPath}); err != nil {
+		t.Fatalf("savePins: %v", err)
+	}
+
+	// Verify the on-disk JSON contains a relative path, not an absolute one.
+	raw, err := os.ReadFile(pinsPath)
+	if err != nil {
+		t.Fatalf("reading pins.json: %v", err)
+	}
+	if filepath.IsAbs(string(raw[1 : len(raw)-2])) { // strip surrounding ["..."]
+		t.Errorf("pins.json should store relative path, got: %s", raw)
+	}
+
+	// Confirm load reconstructs the original absolute path.
+	loaded, err := loadPins(pinsPath, dir)
+	if err != nil {
+		t.Fatalf("loadPins: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0] != aPath {
+		t.Errorf("round-trip: got %v, want [%s]", loaded, aPath)
+	}
+}
+
+func TestLoadPinsAbsolutePathsBackwardCompat(t *testing.T) {
+	dir := t.TempDir()
+	pinsPath := filepath.Join(dir, "pins.json")
+
+	// Simulate a pre-migration pins.json with absolute paths.
+	absPath := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(absPath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("creating test file: %v", err)
+	}
+	// Write absolute path directly to JSON (old format).
+	jsonData := `["` + absPath + `"]`
+	if err := os.WriteFile(pinsPath, []byte(jsonData), 0o644); err != nil {
+		t.Fatalf("writing pins.json: %v", err)
+	}
+
+	// Load should return the absolute path unchanged.
+	loaded, err := loadPins(pinsPath, "/some/other/base")
+	if err != nil {
+		t.Fatalf("loadPins: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0] != absPath {
+		t.Errorf("backward compat: got %v, want [%s]", loaded, absPath)
 	}
 }
 
@@ -107,11 +168,11 @@ func TestLoadPinsPrunesStaleEntries(t *testing.T) {
 	}
 	stalePath := filepath.Join(dir, "gone.md")
 
-	if err := savePins(path, []string{realPath, stalePath}); err != nil {
+	if err := savePins(path, dir, []string{realPath, stalePath}); err != nil {
 		t.Fatalf("savePins: %v", err)
 	}
 
-	loaded, err := loadPins(path)
+	loaded, err := loadPins(path, dir)
 	if err != nil {
 		t.Fatalf("loadPins: %v", err)
 	}
@@ -123,7 +184,7 @@ func TestLoadPinsPrunesStaleEntries(t *testing.T) {
 	}
 
 	// Verify pruned list was persisted.
-	reloaded, err := loadPins(path)
+	reloaded, err := loadPins(path, dir)
 	if err != nil {
 		t.Fatalf("loadPins after prune: %v", err)
 	}

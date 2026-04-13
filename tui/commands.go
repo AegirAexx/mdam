@@ -211,17 +211,17 @@ func cmdLoadPreview(path, glamourStyle string, width int) tea.Cmd {
 }
 
 // cmdLoadPins reads the pinned document paths from pinsPath.
-func cmdLoadPins(pinsPath string) tea.Cmd {
+func cmdLoadPins(pinsPath, baseDir string) tea.Cmd {
 	return func() tea.Msg {
-		pins, err := loadPins(pinsPath)
+		pins, err := loadPins(pinsPath, baseDir)
 		return pinsLoadedMsg{pins: pins, err: err}
 	}
 }
 
 // cmdSavePins writes the pinned paths to pinsPath asynchronously.
-func cmdSavePins(pinsPath string, pins []string) tea.Cmd {
+func cmdSavePins(pinsPath, baseDir string, pins []string) tea.Cmd {
 	return func() tea.Msg {
-		_ = savePins(pinsPath, pins) // errors silently dropped — pins are best-effort
+		_ = savePins(pinsPath, baseDir, pins) // errors silently dropped — pins are best-effort
 		return nil
 	}
 }
