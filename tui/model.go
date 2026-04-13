@@ -184,7 +184,7 @@ func (m Model) Init() tea.Cmd {
 		cmdLoadDocs(m.cfg.BaseDir),
 		cmdLoadDashTodo(m.cfg.TodoPath(), m.theme.GlamourStyle, m.width),
 		cmdLoadGitStatus(m.cfg.BaseDir),
-		cmdLoadPins(m.cfg.PinsPath()),
+		cmdLoadPins(m.cfg.PinsPath(), m.cfg.BaseDir),
 		cmdAutoCreateJournal(m.cfg),
 		cmdTick(),
 	)
@@ -882,7 +882,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if selected := m.selectedDoc(); selected != "" {
 			m.pinnedOrder = togglePin(m.pinnedOrder, selected)
 			m.pinnedPaths = pinsToMap(m.pinnedOrder)
-			return m, cmdSavePins(m.cfg.PinsPath(), m.pinnedOrder)
+			return m, cmdSavePins(m.cfg.PinsPath(), m.cfg.BaseDir, m.pinnedOrder)
 		}
 		m.statusMsg = "no document selected"
 
